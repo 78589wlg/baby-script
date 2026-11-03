@@ -10,7 +10,6 @@ local function hum()
 local c=LP.Character
 if c then return c:FindFirstChildOfClass("Humanoid")end
 end
-local B="https://bytebin.lucko.me/"
 local KEY="少羽没面"
 local auto=true
 local done=false
@@ -36,7 +35,7 @@ task.wait(1.2)
 if auto and AM[game.PlaceId]then
 WindUI:Notify({Title="自动加载",Content="正在加载副脚本",Duration=3})
 task.wait(1)
-pcall(function()loadstring(game:HttpGet("https://bytebin.lucko.me/Yksjcy5MFr"))()end)
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Examination_zh.lua"))()end)
 end
 end})
 T1:Section({Title="界面配色"})
@@ -112,14 +111,14 @@ if h then h.Health=0 end
 end})
 T4:Toggle({Title="友好玩家变绿",Value=false,Callback=function(v)
 if v then
-pcall(function()loadstring(game:HttpGet(B.."L7XdPVNt1b"))()end)
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/EspUser.lua"))()end)
 else
 pcall(function()getgenv().BabyClear()end)
 end
 end})
 T4:Toggle({Title="头顶名字标签",Value=false,Callback=function(v)
 if v then
-pcall(function()loadstring(game:HttpGet(B.."fW3wOf4uPa"))()end)
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/TagUser.lua"))()end)
 getgenv().BabyTagOn=true
 WindUI:Notify({Title="头顶名字标签",Content="只给名单里的人显示",Duration=3})
 else
@@ -163,7 +162,7 @@ end})
 T5=Win:Tab({Title="脚本库",Icon="list",Locked=true})
 T5:Section({Title="其他脚本"})
 local sel="造船寻宝"
-local LU={["造船寻宝"]=B.."pO8Kq7vO8T",["重型钓鱼"]=B.."uruMXa3suB",["在末日中生存下来"]=B.."ckxHrRXB0c",["偷一个蛋"]=B.."20LviS2Wyo",["森林中的99夜"]=B.."U1tKX5iC19",["试炼"]="https://api.mclo.gs/1/raw/HIwUlL0"}
+local LU={["造船寻宝"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Boat.lua",["重型钓鱼"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Fish.lua",["在末日中生存下来"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Deadly.lua",["偷一个蛋"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Egg.lua",["森林中的99夜"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/N99.lua",["试炼"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Examination_zh.lua"}
 T5:Dropdown({Title="选择脚本",Values={"造船寻宝","重型钓鱼","在末日中生存下来","偷一个蛋","森林中的99夜","试炼"},Value="造船寻宝",Callback=function(v)
 sel=v
 end})
@@ -177,7 +176,7 @@ T5:Toggle({Title="进入游戏自动加载副脚本",Value=true,Callback=functio
 local function runAuto()
 if not ok or not auto then return end
 if not AM[game.PlaceId]then return end
-pcall(function()loadstring(game:HttpGet("https://bytebin.lucko.me/Yksjcy5MFr"))()end)
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Examination_zh.lua"))()end)
 end
 if ok then task.spawn(runAuto) end
 LP.CharacterAdded:Connect(function(c)
