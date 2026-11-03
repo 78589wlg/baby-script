@@ -1,5 +1,5 @@
-local LIB="https://bytebin.lucko.me/QDrD9Usmlu"
-local SRC="https://bytebin.lucko.me/s1XUuvgiKS"
+local LIB="https://raw.githubusercontent.com/78589wlg/baby-script/main/esp-lib.lua"
+local SRC="https://raw.githubusercontent.com/78589wlg/baby-script/main/MSESP.luau"
 local COL=Color3.fromRGB(60,255,120)
 local EXTRA={}
 local function split(p)
