@@ -67,8 +67,10 @@ else
 WindUI:Notify({Title="钓鱼",Content="已停止",Duration=2})
 end
 end})
-local BAITS={"Ancestral Bait","Elite Bait","Corrupted Essence Bait","Crude Mash Bait","Basic Bait"}
-local baitName=BAITS[1]
+local BAITS={"祖传饵料","精英饵料","浊气精华饵料","粗制混合饵料","基础饵料"}
+local BAITID={["祖传饵料"]="Ancestral Bait",["精英饵料"]="Elite Bait",["浊气精华饵料"]="Corrupted Essence Bait",["粗制混合饵料"]="Crude Mash Bait",["基础饵料"]="Basic Bait"}
+local baitLabel="祖传饵料"
+local baitName=BAITID[baitLabel]
 local baitAmt=5
 local baitMin=10
 local buyBait=false
@@ -98,7 +100,7 @@ end
 return true
 end
 T1:Section({Title="自动购买饵料"})
-T1:Dropdown({Title="饵料种类",Values=BAITS,Value="Ancestral Bait",Callback=function(v)baitName=v end})
+T1:Dropdown({Title="饵料种类",Values=BAITS,Value="祖传饵料",Callback=function(v)baitLabel=v baitName=BAITID[v]or v end})
 T1:Slider({Title="每次购买数量",Value={Min=1,Max=50,Default=5},Callback=function(v)baitAmt=math.floor(v)end})
 T1:Slider({Title="低于多少自动买",Value={Min=1,Max=50,Default=10},Callback=function(v)baitMin=math.floor(v)end})
 T1:Toggle({Title="自动购买饵料",Value=false,Callback=function(s)
@@ -123,7 +125,7 @@ end})
 T1:Button({Title="立即购买一次",Callback=function()
 local ok=buyBaitNow(baitName,baitAmt)
 if ok then
-WindUI:Notify({Title="饵料",Content="已购买 "..baitName.." x"..baitAmt,Duration=3})
+WindUI:Notify({Title="饵料",Content="已购买 "..baitLabel.." x"..baitAmt,Duration=3})
 else
 WindUI:Notify({Title="饵料",Content="未找到 BuyBait 事件，可能不在游戏中",Duration=3})
 end
@@ -136,7 +138,7 @@ return
 end
 local out={}
 for _,n in ipairs(BAITS)do
-out[#out+1]=n..":"..baitCount(n)
+out[#out+1]=n..":"..baitCount(BAITID[n]or n)
 end
 WindUI:Notify({Title="饵料库存",Content=table.concat(out,"  "),Duration=6})
 end})
