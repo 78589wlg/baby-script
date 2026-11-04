@@ -5,6 +5,13 @@ local sp,jp=16,50
 local Win=WindUI:CreateWindow({Title="婴儿脚本"})
 local ok=false
 local T2,T3,T4,T5
+local G="https://raw.githubusercontent.com/78589wlg/baby-script/main/"
+local PM={[537413528]=G.."Boat.lua",[98502499119821]=G.."Fish.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua"}
+local function subAuto()
+local u=PM[game.PlaceId]
+if not u then return end
+pcall(function()loadstring(game:HttpGet(u))()end)
+end
 local th={"Dark","Light","Rose","Plant","Red","Indigo","Sky","Violet","Amber","Emerald","Midnight","Crimson","MonokaiPro","CottonCandy","Mellowsi","Rainbow"}
 local function hum()
 local c=LP.Character
@@ -13,7 +20,7 @@ end
 local KEY="少羽没面"
 local auto=true
 local done=false
-local AM={[537413528]=1,[98502499119821]=1,[90148635862803]=1,[107778070777162]=1,[79546208627805]=1}
+local AM={[537413528]=1,[98502499119821]=1,[90148635862803]=1,[107778070777162]=1,[79546208627805]=1,[10165583746]=1}
 if getgenv().babyKey=="少羽没面"then ok=true end
 local T1=Win:Tab({Title="卡密验证",Icon="key"})
 T1:Section({Title="请输入卡密"})
@@ -35,7 +42,7 @@ task.wait(1.2)
 if auto and AM[game.PlaceId]then
 WindUI:Notify({Title="自动加载",Content="正在加载副脚本",Duration=3})
 task.wait(1)
-pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Examination_zh.lua"))()end)
+subAuto()
 end
 end})
 T1:Section({Title="界面配色"})
@@ -176,7 +183,7 @@ T5:Toggle({Title="进入游戏自动加载副脚本",Value=true,Callback=functio
 local function runAuto()
 if not ok or not auto then return end
 if not AM[game.PlaceId]then return end
-pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Examination_zh.lua"))()end)
+subAuto()
 end
 if ok then task.spawn(runAuto) end
 LP.CharacterAdded:Connect(function(c)
