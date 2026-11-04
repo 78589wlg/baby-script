@@ -67,9 +67,9 @@ else
 WindUI:Notify({Title="钓鱼",Content="已停止",Duration=2})
 end
 end})
-local BAITS={"祖传饵料","精英饵料","浊气精华饵料","粗制混合饵料","基础饵料"}
-local BAITID={["祖传饵料"]="Ancestral Bait",["精英饵料"]="Elite Bait",["浊气精华饵料"]="Corrupted Essence Bait",["粗制混合饵料"]="Crude Mash Bait",["基础饵料"]="Basic Bait"}
-local baitLabel="祖传饵料"
+local BAITS={"祖传","精英","浊气","粗制","基础"}
+local BAITID={["祖传"]="Ancestral Bait",["精英"]="Elite Bait",["浊气"]="Corrupted Essence Bait",["粗制"]="Crude Mash Bait",["基础"]="Basic Bait"}
+local baitLabel="祖传"
 local baitName=BAITID[baitLabel]
 local baitAmt=5
 local baitMin=10
@@ -100,7 +100,8 @@ end
 return true
 end
 T1:Section({Title="自动购买饵料"})
-T1:Dropdown({Title="饵料种类",Values=BAITS,Value="祖传饵料",Callback=function(v)baitLabel=v baitName=BAITID[v]or v end})
+local baitDD=T1:Dropdown({Title="饵料种类",Values=BAITS,Value="祖传",Callback=function(v)baitLabel=v baitName=BAITID[v]or v end})
+pcall(function()baitDD.Width=210 baitDD:Refresh()end)
 T1:Slider({Title="每次购买数量",Value={Min=1,Max=50,Default=5},Callback=function(v)baitAmt=math.floor(v)end})
 T1:Slider({Title="低于多少自动买",Value={Min=1,Max=50,Default=10},Callback=function(v)baitMin=math.floor(v)end})
 T1:Toggle({Title="自动购买饵料",Value=false,Callback=function(s)
