@@ -6,7 +6,7 @@ local Win=WindUI:CreateWindow({Title="婴儿脚本"})
 local ok=false
 local T2,T3,T4,T5
 local G="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/"
-local PM={[537413528]=G.."Boat_v22.lua",[98502499119821]=G.."Fish_v2.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua"}
+local PM={[537413528]=G.."Boat_v23.lua",[98502499119821]=G.."Fish_v2.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua"}
 local function subAuto()
 local u=PM[game.PlaceId]
 if not u then return end
@@ -169,7 +169,7 @@ end})
 T5=Win:Tab({Title="脚本库",Icon="list",Locked=true})
 T5:Section({Title="其他脚本"})
 local sel="造船寻宝"
-local LU={["造船寻宝"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Boat_v22.lua",["重型钓鱼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Fish_v2.lua",["在末日中生存下来"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Deadly.lua",["偷一个蛋"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Egg.lua",["森林中的99夜"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/N99.lua",["试炼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Examination_zh.lua"}
+local LU={["造船寻宝"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Boat_v23.lua",["重型钓鱼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Fish_v2.lua",["在末日中生存下来"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Deadly.lua",["偷一个蛋"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Egg.lua",["森林中的99夜"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/N99.lua",["试炼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Examination_zh.lua"}
 T5:Dropdown({Title="选择脚本",Values={"造船寻宝","重型钓鱼","在末日中生存下来","偷一个蛋","森林中的99夜","试炼"},Value="造船寻宝",Callback=function(v)
 sel=v
 end})
