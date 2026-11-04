@@ -67,6 +67,79 @@ else
 WindUI:Notify({Title="钓鱼",Content="已停止",Duration=2})
 end
 end})
+local BAITS={"Ancestral Bait","Elite Bait","Corrupted Essence Bait","Crude Mash Bait","Basic Bait"}
+local baitName=BAITS[1]
+local baitAmt=5
+local baitMin=10
+local buyBait=false
+local function baitFolder()
+local d=RS:FindFirstChild("Data")
+local pd=d and d:FindFirstChild(tostring(LP.UserId))
+return pd and pd:FindFirstChild("Bait")or nil
+end
+local function baitCount(n)
+local f=baitFolder()
+local it=f and f:FindFirstChild(n)
+if it and it:IsA("ValueBase")then return tonumber(it.Value)or 0 end
+if it and it:IsA("Folder")then
+local v=it:FindFirstChild("Amount")or it:FindFirstChild("Count")or it:FindFirstChild("Value")
+if v then return tonumber(v.Value)or 0 end
+end
+return 0
+end
+local function buyBaitNow(n,k)
+local e=getEv("BuyBait")
+if not e then return false end
+if e:IsA("RemoteFunction")then
+pcall(function()e:InvokeServer(n,k)end)
+else
+pcall(function()e:FireServer(n,k)end)
+end
+return true
+end
+T1:Section({Title="自动购买饵料"})
+T1:Dropdown({Title="饵料种类",Values=BAITS,Value="Ancestral Bait",Callback=function(v)baitName=v end})
+T1:Slider({Title="每次购买数量",Value={Min=1,Max=50,Default=5},Callback=function(v)baitAmt=math.floor(v)end})
+T1:Slider({Title="低于多少自动买",Value={Min=1,Max=50,Default=10},Callback=function(v)baitMin=math.floor(v)end})
+T1:Toggle({Title="自动购买饵料",Value=false,Callback=function(s)
+buyBait=s
+if s then
+task.spawn(function()
+while buyBait do
+pcall(function()
+local c=baitCount(baitName)
+if c<baitMin then
+buyBaitNow(baitName,baitAmt)
+end
+end)
+task.wait(1)
+end
+end)
+WindUI:Notify({Title="饵料",Content="低于 "..baitMin.." 自动买 "..baitAmt.." 个",Duration=3})
+else
+WindUI:Notify({Title="饵料",Content="已停止",Duration=2})
+end
+end})
+T1:Button({Title="立即购买一次",Callback=function()
+local ok=buyBaitNow(baitName,baitAmt)
+if ok then
+WindUI:Notify({Title="饵料",Content="已购买 "..baitName.." x"..baitAmt,Duration=3})
+else
+WindUI:Notify({Title="饵料",Content="未找到 BuyBait 事件，可能不在游戏中",Duration=3})
+end
+end})
+T1:Button({Title="查看饵料库存",Callback=function()
+local f=baitFolder()
+if not f then
+WindUI:Notify({Title="饵料",Content="读不到背包数据",Duration=3})
+return
+end
+local out={}
+for _,n in ipairs(BAITS)do
+out[#out+1]=n..":"..baitCount(n)
+end
+WindUI:Notify({Title="饵料库存",Content=table.concat(out,"  "),Duration=6})
+end})
 local function slotOk(k)
 local c=LP.Character
 local sf=c and c:FindFirstChild("Skills")
