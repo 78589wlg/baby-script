@@ -100,8 +100,7 @@ end
 return true
 end
 T1:Section({Title="自动购买饵料"})
-local baitDD=T1:Dropdown({Title="饵料种类",Values=BAITS,Value="祖传",Callback=function(v)baitLabel=v baitName=BAITID[v]or v end})
-pcall(function()baitDD.Width=210 baitDD:Refresh()end)
+T1:Dropdown({Title="饵料种类",Values=BAITS,Value="祖传",Callback=function(v)baitLabel=v baitName=BAITID[v]or v end})
 T1:Slider({Title="每次购买数量",Value={Min=1,Max=50,Default=5},Callback=function(v)baitAmt=math.floor(v)end})
 T1:Slider({Title="低于多少自动买",Value={Min=1,Max=50,Default=10},Callback=function(v)baitMin=math.floor(v)end})
 T1:Toggle({Title="自动购买饵料",Value=false,Callback=function(s)
