@@ -5,7 +5,7 @@ local Win=W:CreateWindow({Title="婴儿脚本"})
 local N=W.Notify
 local K="少羽没面"
 local ok=false
-local a={"/Boat_v21","/Fish_v2","/Deadly","/Egg","/N99","/Examination_zh"}
+local a={"/Boat_v22","/Fish_v2","/Deadly","/Egg","/N99","/Examination_zh"}
 local I={537413528,98502499119821,90148635862803,107778070777162,79546208627805,10165583746}
 local PM={}
 for i=1,6 do PM[I[i]]=S..a[i]..".lua" end
