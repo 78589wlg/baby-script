@@ -6,7 +6,7 @@
  */
 
 const SECRET = "baby-script-change-this-to-your-own-random-string";
-const EXPIRE = "2027-12-31";        // 所有卡密的统一到期日
+const VALID_DAYS = 7;               // 每张卡密的有效天数
 const ALPHA  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去掉易混字符 I O 0 1
 
 /* ---------- 工具 ---------- */
@@ -40,6 +40,20 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// 今天往前推 offset 天
+function dayAgo(offset) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
+
+// 日期加 n 天
+function addDays(iso, n) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -57,7 +71,7 @@ function json(obj, status = 200) {
 async function issue() {
   const rnd = crypto.getRandomValues(new Uint8Array(8));
   const body = toBase32(rnd, 4);
-  const sig = toBase32(await hmac(body + "|" + EXPIRE), 4);
+  const sig = toBase32(await hmac(body + "|" + today()), 4);
   return `BOAT-${body}-${sig}`;
 }
 
@@ -67,11 +81,17 @@ async function verify(key) {
   const m = k.match(/^BOAT-([A-Z0-9]{4})-([A-Z0-9]{4})$/);
   if (!m) return { ok: false, msg: "卡密格式不正确" };
 
-  const sig = toBase32(await hmac(m[1] + "|" + EXPIRE), 4);
-  if (sig !== m[2]) return { ok: false, msg: "卡密无效" };
-
-  if (today() > EXPIRE) return { ok: false, msg: `卡密已于 ${EXPIRE} 过期` };
-  return { ok: true, msg: "验证通过", exp: EXPIRE };
+  for (let i = 0; i <= VALID_DAYS; i++) {
+    const issued = dayAgo(i);
+    const sig = toBase32(await hmac(m[1] + "|" + issued), 4);
+    if (sig === m[2]) {
+      const exp = addDays(issued, VALID_DAYS);
+      if (today() > exp) return { ok: false, msg: `卡密已于 ${exp} 过期` };
+      const left = Math.round((new Date(exp) - new Date(today())) / 86400000);
+      return { ok: true, msg: "验证通过", exp, left, issued };
+    }
+  }
+  return { ok: false, msg: "卡密无效" };
 }
 
 /* ---------- 路由 ---------- */
@@ -86,7 +106,7 @@ export default {
       // 发卡
       if (path === "/claim" || path === "/") {
         const key = await issue();
-        return json({ ok: true, key, exp: EXPIRE });
+        return json({ ok: true, key, exp: addDays(today(), VALID_DAYS), days: VALID_DAYS });
       }
 
       // 验卡
@@ -98,7 +118,7 @@ export default {
 
       // 健康检查
       if (path === "/ping") {
-        return json({ ok: true, pong: Date.now(), exp: EXPIRE });
+        return json({ ok: true, pong: Date.now(), days: VALID_DAYS });
       }
 
       return json({ ok: false, msg: "接口不存在" }, 404);
