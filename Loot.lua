@@ -96,7 +96,7 @@ end
 local function lower(s)return string.lower(tostring(s or ""))end
 
 local ITEM_KW={"loot","drop","chest","crate","item","coin","gem","gold","money","cash","reward","bag","orb","shard","key","box","pickup"}
-local MOB_KW={"mob","enemy","monster","boss","slime","goblin","frog","croc","witch","zombie","skeleton","guard","animal","npc"}
+local MOB_KW={"mob","enemy","monster","boss","slime","goblin","frog","croc","witch","zombie","skeleton","guard"}
 local function matchAny(name,list)
 local n=lower(name)
 for _,k in ipairs(list)do
@@ -373,6 +373,28 @@ end
 end)
 
 local autoAtk=false
+local strictOnly=true
+local NPC_KW={"npc","shop","quest","vendor","merchant","seller","trader","dialog","guide","store","smith","banker","owner","clerk","waiter","doctor"}
+
+local function isNPCModel(m)
+if not m or not m:IsA("Model")then return true end
+if matchAny(m.Name,NPC_KW)then return true end
+if m:FindFirstChildOfClass("ProximityPrompt")then return true end
+if m:FindFirstChildOfClass("Dialog")then return true end
+return false
+end
+
+local function hostileTagged(m)
+if matchAny(m.Name,MOB_KW)then return true end
+local o=m
+for _=1,3 do
+o=o.Parent
+if not o or o==workspace then break end
+if matchAny(o.Name,MOB_KW)then return true end
+end
+return false
+end
+
 local function nearestMob(maxDist)
 local r=root()
 if not r then return nil end
@@ -381,11 +403,13 @@ for _,d in ipairs(workspace:GetDescendants())do
 if d:IsA("Humanoid") and d.Health>0 and d.Parent~=LP.Character then
 local m=d.Parent
 local isPlr=m and P:GetPlayerFromCharacter(m)
-if not isPlr then
+if not isPlr and not isNPCModel(m)then
+if not strictOnly or hostileTagged(m)then
 local pr=m and (m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso") or m:FindFirstChild("UpperTorso"))
 if pr then
 local dist=(pr.Position-r.Position).Magnitude
 if dist<bd then bd=dist best=d end
+end
 end
 end
 end
@@ -418,6 +442,7 @@ if v then WindUI:Notify({Title="注意",Content="瞬移拾取风险较高，已�
 end})
 T3:Section({Title="战斗"})
 T3:Toggle({Title="自动攻击最近目标",Value=false,Callback=function(v)autoAtk=v end})
+T3:Toggle({Title="严格模式（只打怪物，不碰商店/任务NPC）",Value=true,Callback=function(v)strictOnly=v end})
 
 T3:Section({Title="传送"})
 T3:Button({Title="传送到最近的掉落物",Callback=function()
