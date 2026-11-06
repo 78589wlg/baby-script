@@ -314,12 +314,26 @@ end)
 
 -- ================= 自动 =================
 local autoPick,fastPick=false,false
+local paySkip=true
+local PAY_KW={"buy","purchase","robux","r$","price","cost","unlock","pay","premium","购买","付费","解锁"}
+local function isPaid(pr)
+if not paySkip then return false end
+local t,o="",""
+pcall(function()t=lower(pr.PromptText)end)
+pcall(function()o=lower(pr.ObjectText)end)
+for _,k in ipairs(PAY_KW)do
+if string.find(t,k,1,true)or string.find(o,k,1,true)then return true end
+end
+if t:match("%$%s*%d")or o:match("%$%s*%d")then return true end
+return false
+end
+
 local function nearPrompts(maxDist)
 local r=root()
 if not r then return {} end
 local out={}
 for _,d in ipairs(workspace:GetDescendants())do
-if d:IsA("ProximityPrompt") and d.Enabled then
+if d:IsA("ProximityPrompt") and d.Enabled and not isPaid(d)then
 local pp=d.Parent
 if pp and pp:IsA("BasePart")then
 local dist=(pp.Position-r.Position).Magnitude
@@ -395,6 +409,53 @@ end
 return false
 end
 
+-- 刷怪样本：玩家手动指认一次，脚本按它的名字/所在文件夹认怪
+local sample={ok=false,names={}}
+
+local function sampleMatch(m)
+if not sample.ok then return false end
+local o=m
+for _=1,4 do
+if not o or o==workspace then break end
+local n=lower(o.Name)
+for _,sn in ipairs(sample.names)do
+if n==sn then return true end
+end
+o=o.Parent
+end
+return false
+end
+
+local function learnSample()
+local r=root()
+if not r then return false,"没找到你的角色" end
+local best,bd=nil,80
+for _,d in ipairs(workspace:GetDescendants())do
+if d:IsA("Humanoid") and d.Health>0 and d.Parent~=LP.Character then
+local m=d.Parent
+local isPlr=m and P:GetPlayerFromCharacter(m)
+if not isPlr and not isNPCModel(m)then
+local pr=m and (m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso") or m:FindFirstChild("UpperTorso"))
+if pr then
+local dist=(pr.Position-r.Position).Magnitude
+if dist<bd then bd=dist best=m end
+end
+end
+end
+end
+if not best then return false,"附近没找到怪，走近一点再点" end
+local names={}
+local o=best
+for _=1,4 do
+if not o or o==workspace then break end
+names[#names+1]=lower(o.Name)
+o=o.Parent
+end
+sample.names=names
+sample.ok=true
+return true,best.Name
+end
+
 local function nearestMob(maxDist)
 local r=root()
 if not r then return nil end
@@ -404,7 +465,15 @@ if d:IsA("Humanoid") and d.Health>0 and d.Parent~=LP.Character then
 local m=d.Parent
 local isPlr=m and P:GetPlayerFromCharacter(m)
 if not isPlr and not isNPCModel(m)then
-if not strictOnly or hostileTagged(m)then
+local okt=false
+if sample.ok then
+okt=sampleMatch(m)
+elseif strictOnly then
+okt=hostileTagged(m)
+else
+okt=true
+end
+if okt then
 local pr=m and (m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso") or m:FindFirstChild("UpperTorso"))
 if pr then
 local dist=(pr.Position-r.Position).Magnitude
@@ -416,6 +485,36 @@ end
 end
 return best
 end
+
+local farmOn=false
+local farmWarned=false
+task.spawn(function()
+while true do
+task.wait(0.45)
+if farmOn then
+pcall(function()
+local tgt=nearestMob(1000)
+if not tgt then
+if not farmWarned then
+farmWarned=true
+WindUI:Notify({Title="刷怪农场",Content="找不到目标：先走到怪旁边点「把最近的怪物设为样本」，或关掉严格模式",Duration=6})
+end
+return
+end
+farmWarned=false
+local m=tgt.Parent
+local pr=m and (m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso") or m:FindFirstChild("UpperTorso"))
+local r=root()
+if pr and r then
+r.CFrame=pr.CFrame*CFrame.new(0,0,3.5)
+task.wait(0.12)
+local tool=LP.Character and LP.Character:FindFirstChildOfClass("Tool")
+if tool then pcall(function()tool:Activate()end) end
+end
+end)
+end
+end
+end)
 
 task.spawn(function()
 while true do
@@ -436,6 +535,7 @@ end)
 
 T3:Section({Title="拾取"})
 T3:Toggle({Title="自动拾取（走到附近才触发）",Value=false,Callback=function(v)autoPick=v end})
+T3:Toggle({Title="跳过付费选项（购买/Robux 不拿）",Value=true,Callback=function(v)paySkip=v end})
 T3:Toggle({Title="瞬移拾取（快，但可能被反作弊盯）",Value=false,Callback=function(v)
 tpPick=v
 if v then WindUI:Notify({Title="注意",Content="瞬移拾取风险较高，已开反踢出兜底",Duration=4}) end
@@ -443,6 +543,30 @@ end})
 T3:Section({Title="战斗"})
 T3:Toggle({Title="自动攻击最近目标",Value=false,Callback=function(v)autoAtk=v end})
 T3:Toggle({Title="严格模式（只打怪物，不碰商店/任务NPC）",Value=true,Callback=function(v)strictOnly=v end})
+
+T3:Section({Title="刷怪农场"})
+T3:Toggle({Title="自动刷怪农场（瞬移到怪旁边自动打）",Value=false,Callback=function(v)
+farmOn=v
+if v then
+WindUI:Notify({Title="刷怪农场",Content="建议先走到怪旁边点「设为样本」，打得又准又不误伤",Duration=5})
+end
+end})
+T3:Button({Title="把最近的怪物设为刷怪样本",Callback=function()
+local ok,msg=learnSample()
+WindUI:Notify({Title="刷怪样本",Content=ok and ("已学习："..msg) or ("失败："..tostring(msg)),Duration=6})
+end})
+T3:Button({Title="查看当前样本",Callback=function()
+if not sample.ok then
+WindUI:Notify({Title="刷怪样本",Content="还没设置",Duration=4})
+else
+WindUI:Notify({Title="刷怪样本",Content=table.concat(sample.names," / "),Duration=6})
+end
+end})
+T3:Button({Title="清除刷怪样本",Callback=function()
+sample.ok=false
+sample.names={}
+WindUI:Notify({Title="刷怪样本",Content="已清除",Duration=3})
+end})
 
 T3:Section({Title="传送"})
 T3:Button({Title="传送到最近的掉落物",Callback=function()
