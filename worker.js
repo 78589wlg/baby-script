@@ -7,11 +7,12 @@
  *   GET  /verify?key=XXX    主脚本验卡（7 天有效期内有效）
  *   GET  /ping              健康检查
  *
- * 部署：Cloudflare → Workers & Pages → Create Worker → 粘贴本文件 → 改 SECRET → Deploy
+ * 部署：Cloudflare → Workers & Pages → 创建 Worker → 粘贴本文件 → 部署
+ *       然后到「设置 → 变量和机密」添加 SECRET = 你自己的随机字符串（必须加，否则 /claim 拒绝发卡）
  * 部署后把 https://xxx.workers.dev 写进仓库 api.txt 第一行。
  */
 
-const SECRET = "baby-script-change-this-to-your-own-random-string"; // ★ 改成你自己的随机字符串
+const DEFAULT_SECRET = "please-set-env-SECRET";   // 仅当未配置环境变量时使用（不安全）
 const VALID_DAYS = 7;                    // 卡密有效天数
 const LIMIT_HOURS = 24;                  // 同一 IP 多少小时内只能领 1 张
 const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去掉易混字符 I O 0 1
@@ -40,9 +41,9 @@ function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: JSONH });
 }
 
-async function hmac(text) {
+async function hmac(text, secret) {
   const key = await crypto.subtle.importKey(
-    "raw", enc.encode(SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
   const buf = await crypto.subtle.sign("HMAC", key, enc.encode(text));
   const bytes = new Uint8Array(buf);
@@ -64,19 +65,19 @@ function randStr(n) {
 }
 
 /* 卡密格式：BOAT-XXXX-XXXX，后 4 位是 HMAC(前4位|签发日期) 的截断 */
-async function issue() {
+async function issue(secret) {
   const body = randStr(4);
   const date = dayStr(0);
-  const sig = (await hmac(body + "|" + date)).slice(0, 4);
+  const sig = (await hmac(body + "|" + date, secret)).slice(0, 4);
   return { key: `BOAT-${body}-${sig}`, exp: dayStr(VALID_DAYS) };
 }
 
-async function verify(key) {
+async function verify(key, secret) {
   const m = /^BOAT-([A-Z0-9]{4})-([A-Z0-9]{4})$/i.exec((key || "").trim().toUpperCase());
   if (!m) return { ok: false, msg: "卡密格式不对" };
   for (let i = 0; i <= VALID_DAYS; i++) {
     const date = dayStr(-i);
-    const sig = (await hmac(m[1] + "|" + date)).slice(0, 4);
+    const sig = (await hmac(m[1] + "|" + date, secret)).slice(0, 4);
     if (sig === m[2]) return { ok: true, exp: dayStr(VALID_DAYS - i) };
   }
   return { ok: false, msg: "卡密无效或已过期" };
@@ -103,6 +104,7 @@ async function tooSoon(ip, env) {
 /* ---------- 路由 ---------- */
 export default {
   async fetch(request, env) {
+    const SECRET = (env && env.SECRET) || DEFAULT_SECRET;
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const cors = {
@@ -143,18 +145,22 @@ export default {
         return json({ ok: false, msg: `答对 ${right}/${ids.length} 题，全对才能领卡` });
       }
 
+      if (!env || !env.SECRET) {
+        return json({ ok: false, msg: "服务端未配置 SECRET，请联系管理员" }, 500);
+      }
+
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       if (await tooSoon(ip, env)) {
         return json({ ok: false, msg: `同一网络 ${LIMIT_HOURS} 小时内只能领 1 张，请明天再来` });
       }
 
-      const k = await issue();
+      const k = await issue(SECRET);
       return json({ ok: true, key: k.key, exp: k.exp });
     }
 
     if (path === "/verify") {
       const key = url.searchParams.get("key") || "";
-      const r = await verify(key);
+      const r = await verify(key, SECRET);
       return json(r, r.ok ? 200 : 403);
     }
 
