@@ -1,3 +1,2 @@
-# 在这里填你的 Worker 地址（一行，不要加引号）
-# 部署完成后把下面的示例改成你自己的，例如：
-# https://baby-key.你的名字.workers.dev
+https://babykey.3492202561.workers.dev
+# 换 Worker 域名时只改上面第一行
