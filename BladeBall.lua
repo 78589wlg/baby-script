@@ -1,4 +1,4 @@
--- 婴儿脚本 · Blade Ball V14
+-- 婴儿脚本 · Blade Ball V15
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
@@ -10,6 +10,7 @@
 -- V12：去掉按球对象记录的锁（游戏复用球实例会导致第二回合永久失效），改为时间戳 + 重生重置
 -- V13：监听格挡成功，连续 N 次后主动冷却
 -- V14：改用 getconnections 直连游戏格挡按钮（Hotbar.Block），不再模拟虚假输入，规避输入层检测
+-- V15：界面精简成一个开关按钮（去掉三种模式按钮）
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -29,8 +30,8 @@ local cfg = {
 	maxDist = 16,        -- 球进入这个距离内才允许格挡（太远挡了服务端不认）
 	pointDist = 9,       -- 贴脸距离：不管时间，直接挡
 	streakMax = 6,       -- 连续格挡成功 N 次后主动歇一下（0 = 不歇）
-	coolMin = 3.5,       -- 冷却下限（秒）
-	coolMax = 5.5,       -- 冷却上限（秒）
+	coolMin = 4,         -- 冷却下限（秒）
+	coolMax = 6,         -- 冷却上限（秒）
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
@@ -554,11 +555,42 @@ task.spawn(function()
 end)
 
 -- ================= UI =================
-T1:Section({ Title = "格挡模式（点一个）" })
-T1:Button({ Title = "① 智能格挡（模拟触摸，推荐）", Callback = function() setMode("smart") end })
-T1:Button({ Title = "② 狂点触摸（无冷却，最暴力）", Callback = function() setMode("spam") end })
-T1:Button({ Title = "③ 发远程（本服无效，备用）", Callback = function() setMode("remote") end })
-T1:Button({ Title = "关闭自动格挡", Callback = function() setMode("off") end })
+T1:Section({ Title = "自动格挡" })
+
+local mainBtn, mainTitle
+mainTitle = function()
+	if cfg.mode == "off" then return "▶ 开启自动格挡" end
+	return "■ 已开启 · 点此关闭"
+end
+
+local function paintMain()
+	if not mainBtn then return end
+	local t = mainTitle()
+	pcall(function() mainBtn:SetTitle(t) end)
+end
+
+mainBtn = T1:Button({
+	Title = mainTitle(),
+	Desc = "点一下开关，球锁定你时自动格挡",
+	Callback = function()
+		setMode(cfg.mode == "off" and "smart" or "off")
+		paintMain()
+	end,
+})
+
+-- 按钮下面实时显示状态，点了有没有生效一眼能看出来
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if mainBtn then
+			local d = "点一下开关，球锁定你时自动格挡"
+			if cfg.mode ~= "off" then
+				d = "运行中 · 已点击 " .. tostring(S.fires) .. " 次 · 锁定你的球 " .. tostring(S.mine) .. " 颗"
+			end
+			pcall(function() mainBtn:SetDesc(d) end)
+		end
+	end
+end)
 
 T1:Section({ Title = "参数" })
 T1:Slider({ Title = "提前量（0.10–0.60 秒）", Value = { Min = 10, Max = 60, Default = 30 }, Callback = function(v)
@@ -588,7 +620,7 @@ T1:Slider({ Title = "贴脸距离（5–20 格，无条件挡）", Value = { Min
 end})
 
 T1:Section({ Title = "连击保护（避开服务端阈值）" })
-T1:Slider({ Title = "连续格挡上限（1–6 次，到就歇）", Value = { Min = 1, Max = 6, Default = 3 }, Callback = function(v)
+T1:Slider({ Title = "连续格挡上限（1–6 次，到就歇）", Value = { Min = 1, Max = 6, Default = 6 }, Callback = function(v)
 	cfg.streakMax = v
 end})
 T1:Slider({ Title = "歇多久下限（2–10 秒）", Value = { Min = 2, Max = 10, Default = 4 }, Callback = function(v)
@@ -602,26 +634,11 @@ end})
 T1:Slider({ Title = "最小点击间隔（80–400 毫秒，防踢）", Value = { Min = 80, Max = 400, Default = 120 }, Callback = function(v)
 	cfg.minGap = v / 1000
 end})
-T1:Slider({ Title = "狂点间隔（100–400 毫秒）", Value = { Min = 100, Max = 400, Default = 150 }, Callback = function(v)
-	cfg.spamGap = v / 1000
-end})
-T1:Slider({ Title = "格挡参数1（0.10–1.00）", Value = { Min = 10, Max = 100, Default = 50 }, Callback = function(v)
-	cfg.arg1 = v / 100
-end})
 T1:Slider({ Title = "点击位置 X（0.20–0.80）", Value = { Min = 20, Max = 80, Default = 50 }, Callback = function(v)
 	cfg.tapX = v / 100
 end})
 T1:Slider({ Title = "点击位置 Y（0.20–0.85）", Value = { Min = 20, Max = 85, Default = 62 }, Callback = function(v)
 	cfg.tapY = v / 100
-end})
-T1:Toggle({ Title = "发送完整参数（关掉=空参数）", Value = true, Callback = function(v)
-	cfg.fullArgs = v
-	WindUI:Notify({ Title = "参数模式", Content = v and "完整 4 参数（推荐）" or "空参数（多数服会用不了）", Duration = 4 })
-end})
-T1:Input({ Title = "③ 模式按键（默认 F）", Placeholder = "F", Value = "F", Callback = function(t)
-	local v = tostring(t or ""):gsub("%s+", "")
-	if v == "" then v = "F" end
-	cfg.keyName = v:upper()
 end})
 
 T1:Section({ Title = "自检" })
@@ -651,7 +668,6 @@ T1:Button({ Title = "诊断状态（自动复制）", Callback = function()
 		.. "\n【远程】ParryAttempt=" .. (ev and "存在" or "不存在")
 		.. " | 相机=" .. (cam and "有" or "无")
 		.. " | 球总数=" .. total .. " 锁定我=" .. mine
-		.. " | 参数模式=" .. (cfg.fullArgs and "完整" or "空")
 		.. " | 触摸=" .. (lastTapOk and "可用" or "未成功")
 		.. " | 方式=" .. tostring(lastTapErr)
 		.. "\n【按钮】" .. tostring(blockPath)
@@ -688,8 +704,8 @@ end})
 task.delay(1, function()
 	pcall(function()
 		WindUI:Notify({
-			Title = "Blade Ball V4",
-			Content = parryEvent() and "ParryAttempt 已找到，点「① 智能格挡」开始" or "没找到 ParryAttempt，先别开格挡",
+			Title = "Blade Ball V15",
+			Content = blockBtn and "格挡按钮已就绪，点「▶ 开启自动格挡」" or "没找到格挡按钮，会降级为模拟触摸点击",
 			Duration = 7,
 		})
 	end)
