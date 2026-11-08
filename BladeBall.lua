@@ -1,4 +1,4 @@
--- 婴儿脚本 · Blade Ball V10
+-- 婴儿脚本 · Blade Ball V11
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
@@ -6,6 +6,7 @@
 -- V7：按行为特征防踢（随机抖动 + 故意失误率），100% 格挡成功率是最明显的机器特征
 -- V9：取消失误率，反应延迟 150~600ms 随机
 -- V10：加距离限制，球进入设定格数内才格挡（太远挡了服务端不认，球打不回去）
+-- V11：延迟严格受剩余飞行时间约束（最多用 60%），贴脸走紧急通道绕过节流，解决漏挡被球打死
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -147,17 +148,21 @@ local function tapScreen()
 	return false
 end
 
-local function trigger(isAuto)
+local function trigger(isAuto, urgent)
 	local now = os.clock()
 
-	-- 自动触发时，按概率故意放过一颗球：成功率 100% 是最容易被识别的特征
-	if isAuto and cfg.humanOn and math.random() < (cfg.missRate or 0) then
+	-- 自动触发时，按概率故意放过一颗球（默认 0，不生效）
+	if isAuto and not urgent and cfg.humanOn and math.random() < (cfg.missRate or 0) then
 		return
 	end
 
-	-- 间隔加 ±25% 抖动，避免形成固定节拍
+	-- 间隔加抖动；球快贴脸时走紧急通道，放宽到 40ms，宁可多点一次也不能漏
 	local gap = cfg.minGap or 0.12
-	if cfg.humanOn then gap = gap * rnd(0.85, 1.45) end
+	if urgent then
+		gap = 0.04
+	elseif cfg.humanOn then
+		gap = gap * rnd(0.85, 1.45)
+	end
 	if now - lastAct < gap then return end
 	lastAct = now
 	if cfg.mode == "key" then
@@ -214,23 +219,31 @@ local function checkBall(b, root)
 		if pending[b] then return end
 		pending[b] = true
 
-		-- 人类反应时间：不会在球锁定的同一帧就按下，也不会每次都一样
+		-- 人类反应时间，但绝不能超过剩余飞行时间，否则必漏
 		local waitT = 0
 		if cfg.humanOn then
-			if pointBlank then
-				-- 球已经贴脸，只能象征性延迟一下
-				waitT = rnd(0.03, 0.07)
+			if pointBlank or eta < 0.12 then
+				waitT = rnd(0.02, 0.05)
 			else
-				local lo, hi = cfg.reactMin, cfg.reactMax
-				-- 反应再慢也不能慢到球已经砸脸上，最多用到剩余时间的一半
-				if hi > eta * 0.55 then hi = math.max(lo, eta * 0.55) end
+				-- 最多用掉剩余时间的 60%，留 40% 给输入和网络延迟
+				local budget = math.max(0.03, eta * 0.60)
+				local lo = math.min(cfg.reactMin or 0.15, budget)
+				local hi = math.min(cfg.reactMax or 0.60, budget)
+				if hi < lo then hi = lo end
 				waitT = rnd(lo, hi)
 			end
 		end
 
 		task.delay(waitT, function()
 			pending[b] = nil
-			if b and b.Parent then trigger(true) end
+			if b and b.Parent then
+				-- 到点后再确认一次距离，超时太久的球直接放弃
+				local r2 = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+				if not r2 then return end
+				local d2 = (b.Position - r2.Position).Magnitude
+				if d2 > (cfg.maxDist or 16) + 6 then return end
+				trigger(true, d2 <= (cfg.pointDist or 9) + 3 or eta < 0.18)
+			end
 		end)
 	end
 end
@@ -264,7 +277,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V10" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V11" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
