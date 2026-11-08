@@ -1,4 +1,4 @@
--- 婴儿脚本 · Blade Ball V13
+-- 婴儿脚本 · Blade Ball V14
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
@@ -8,7 +8,8 @@
 -- V10：加距离限制，球进入设定格数内才格挡（太远挡了服务端不认，球打不回去）
 -- V11：延迟严格受剩余飞行时间约束（最多用 60%），贴脸走紧急通道绕过节流，解决漏挡被球打死
 -- V12：去掉按球对象记录的锁（游戏复用球实例会导致第二回合永久失效），改为时间戳 + 重生重置
--- V13：监听格挡成功，连续 N 次后主动冷却，避开服务端「连续 3 次即禁用」的阈值
+-- V13：监听格挡成功，连续 N 次后主动冷却
+-- V14：改用 getconnections 直连游戏格挡按钮（Hotbar.Block），不再模拟虚假输入，规避输入层检测
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -27,7 +28,7 @@ local cfg = {
 	reactMax = 0.60,     -- 反应延迟上限（秒）
 	maxDist = 16,        -- 球进入这个距离内才允许格挡（太远挡了服务端不认）
 	pointDist = 9,       -- 贴脸距离：不管时间，直接挡
-	streakMax = 3,       -- 连续格挡成功 N 次后主动歇一下（避开服务端阈值）
+	streakMax = 6,       -- 连续格挡成功 N 次后主动歇一下（0 = 不歇）
 	coolMin = 3.5,       -- 冷却下限（秒）
 	coolMax = 5.5,       -- 冷却上限（秒）
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
@@ -115,7 +116,79 @@ local function rnd(a, b)
 	return a + math.random() * (b - a)
 end
 
+-- ================= 方案A：直接触发游戏格挡按钮的连接（推荐） =================
+-- 参考开源实现：PlayerGui.Hotbar.Block 的 Activated / MouseButton1Click 连接可以直接 Fire
+-- 好处：不产生虚假输入事件，走的是游戏自己的点击逻辑，反作弊看不到异常输入
+local blockBtn, blockPath = nil, "未找到"
+
+local function findBlockButton()
+	local pg = LP:FindFirstChild("PlayerGui")
+	if not pg then return nil, "无 PlayerGui" end
+
+	local paths = {
+		{"Hotbar", "Block"}, {"Hotbar", "Parry"}, {"Hotbar", "Deflect"},
+		{"Block"}, {"Parry"}, {"Main", "Block"},
+	}
+	for _, path in ipairs(paths) do
+		local cur = pg
+		local okp = true
+		for _, nm in ipairs(path) do
+			if not cur then okp = false break end
+			cur = cur:FindFirstChild(nm)
+			if not cur then okp = false break end
+		end
+		if okp and cur and (cur:IsA("TextButton") or cur:IsA("ImageButton")) then
+			return cur, table.concat(path, ".")
+		end
+	end
+
+	-- 全局扫一遍，名字带 block / parry / deflect
+	for _, d in ipairs(pg:GetDescendants()) do
+		if d:IsA("TextButton") or d:IsA("ImageButton") then
+			local n = string.lower(d.Name)
+			if n:find("block") or n:find("parry") or n:find("deflect") then
+				return d, d:GetFullName()
+			end
+		end
+	end
+	return nil, "未找到"
+end
+
+local function fireButton(btn)
+	if not btn or not btn.Parent then return false end
+	if typeof(getconnections) ~= "function" then return false end
+
+	local fired = false
+	for _, evName in ipairs({"Activated", "MouseButton1Click", "MouseButton1Down", "TouchTap"}) do
+		local sig = btn[evName]
+		if sig then
+			local okc, conns = pcall(getconnections, sig)
+			if okc and conns then
+				for _, c in pairs(conns) do
+					local okf = pcall(function() c:Fire() end)
+					if okf then fired = true end
+				end
+			end
+		end
+	end
+	return fired
+end
+
+local function refreshBlockButton()
+	local b, pathName = findBlockButton()
+	blockBtn, blockPath = b, pathName
+	return b
+end
+
 local function tapScreen()
+	-- 优先：直接触发格挡按钮的连接
+	if blockBtn and blockBtn.Parent then
+		if fireButton(blockBtn) then
+			lastTapOk, lastTapErr = true, ("按钮连接 " .. tostring(blockPath))
+			return true
+		end
+	end
+
 	local cam = WS.CurrentCamera
 	local vp = (cam and cam.ViewportSize) or Vector2.new(800, 600)
 
@@ -332,7 +405,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V13" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V14" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -469,6 +542,15 @@ LP.CharacterAdded:Connect(function()
 	lastAct = 0
 	task.wait(0.6)
 	pcall(applyHum)
+	pcall(refreshBlockButton)
+end)
+
+-- 启动时扫一次格挡按钮（PlayerGui 里可能有，也可能要等角色加载）
+task.spawn(function()
+	for i = 1, 10 do
+		if refreshBlockButton() then break end
+		task.wait(1)
+	end
 end)
 
 -- ================= UI =================
@@ -543,6 +625,14 @@ T1:Input({ Title = "③ 模式按键（默认 F）", Placeholder = "F", Value = 
 end})
 
 T1:Section({ Title = "自检" })
+T1:Button({ Title = "重新扫描格挡按钮", Callback = function()
+	local b = refreshBlockButton()
+	WindUI:Notify({
+		Title = b and "找到格挡按钮" or "没找到格挡按钮",
+		Content = b and (tostring(blockPath) .. "｜将直连它的点击连接") or "会降级为模拟触摸点击",
+		Duration = 8,
+	})
+end})
 T1:Button({ Title = "诊断状态（自动复制）", Callback = function()
 	local ev = parryEvent()
 	local folder = ballFolder()
@@ -564,6 +654,8 @@ T1:Button({ Title = "诊断状态（自动复制）", Callback = function()
 		.. " | 参数模式=" .. (cfg.fullArgs and "完整" or "空")
 		.. " | 触摸=" .. (lastTapOk and "可用" or "未成功")
 		.. " | 方式=" .. tostring(lastTapErr)
+		.. "\n【按钮】" .. tostring(blockPath)
+		.. " | getconnections=" .. (typeof(getconnections) == "function" and "可用" or "不可用")
 
 	if setclipboard then pcall(setclipboard, txt) end
 	WindUI:Notify({ Title = "诊断（已复制）", Content = txt, Duration = 10 })
