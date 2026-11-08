@@ -1,8 +1,9 @@
--- 婴儿脚本 · Blade Ball V6
+-- 婴儿脚本 · Blade Ball V7
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
 -- V6：该服有频率型反作弊，默认点击间隔放宽到 120ms，狂点模式 150ms
+-- V7：按行为特征防踢（随机抖动 + 故意失误率），100% 格挡成功率是最明显的机器特征
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -15,6 +16,8 @@ local cfg = {
 	threshold = 0.30,    -- 剩余飞行秒数小于它才格挡
 	spamGap = 0.15,
 	minGap = 0.12,       -- 两次点击的最小间隔（防反作弊频率检测）
+	humanOn = true,      -- 人类化：随机间隔/按压时长/坐标 + 故意失误
+	missRate = 0.12,     -- 故意不格挡的概率（100% 成功率是最明显的机器特征）
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
@@ -96,16 +99,30 @@ end
 -- ================= 模拟触摸（关键：这游戏格挡走本地判定，不发远程） =================
 local lastTapOk, lastTapErr = false, "未执行"
 
+local function rnd(a, b)
+	return a + math.random() * (b - a)
+end
+
 local function tapScreen()
 	local cam = WS.CurrentCamera
 	local vp = (cam and cam.ViewportSize) or Vector2.new(800, 600)
-	local x = math.floor(vp.X * (cfg.tapX or 0.5))
-	local y = math.floor(vp.Y * (cfg.tapY or 0.62))
+
+	-- 人手的点击坐标不会每次完全一样，这里加几十像素的随机偏移
+	local ox, oy = 0, 0
+	if cfg.humanOn then
+		ox = rnd(-24, 24)
+		oy = rnd(-18, 18)
+	end
+	local x = math.floor(vp.X * (cfg.tapX or 0.5) + ox)
+	local y = math.floor(vp.Y * (cfg.tapY or 0.62) + oy)
+
+	-- 人手指按压通常 45~110 毫秒，固定 12 毫秒是机器特征
+	local pressT = cfg.humanOn and rnd(0.045, 0.110) or 0.012
 
 	local VIM = game:GetService("VirtualInputManager")
 	local ok, err = pcall(function()
 		VIM:SendMouseButtonEvent(x, y, 0, true, game, 1)
-		task.wait(0.012)
+		task.wait(pressT)
 		VIM:SendMouseButtonEvent(x, y, 0, false, game, 1)
 	end)
 	if ok then lastTapOk, lastTapErr = true, ("VIM @" .. x .. "," .. y) return true end
@@ -124,9 +141,18 @@ local function tapScreen()
 	return false
 end
 
-local function trigger()
+local function trigger(isAuto)
 	local now = os.clock()
-	if now - lastAct < (cfg.minGap or 0.12) then return end
+
+	-- 自动触发时，按概率故意放过一颗球：成功率 100% 是最容易被识别的特征
+	if isAuto and cfg.humanOn and math.random() < (cfg.missRate or 0) then
+		return
+	end
+
+	-- 间隔加 ±25% 抖动，避免形成固定节拍
+	local gap = cfg.minGap or 0.12
+	if cfg.humanOn then gap = gap * rnd(0.85, 1.45) end
+	if now - lastAct < gap then return end
 	lastAct = now
 	if cfg.mode == "key" then
 		pressKey()
@@ -168,8 +194,11 @@ local function checkBall(b, root)
 	local dist = (b.Position - root.Position).Magnitude
 	local eta = dist / speed
 
-	if eta <= cfg.threshold or dist < 12 then
-		trigger()
+	local thr = cfg.threshold
+	if cfg.humanOn then thr = thr * rnd(0.82, 1.22) end
+
+	if eta <= thr or dist < 12 then
+		trigger(true)
 	end
 end
 
@@ -195,14 +224,14 @@ task.spawn(function()
 	while true do
 		task.wait(cfg.spamGap)
 		if cfg.mode == "spam" then
-			pcall(trigger)
+			pcall(function() trigger(false) end)
 		end
 	end
 end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V6" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V7" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -346,6 +375,13 @@ T1:Button({ Title = "关闭自动格挡", Callback = function() setMode("off") e
 T1:Section({ Title = "参数" })
 T1:Slider({ Title = "提前量（0.10–0.60 秒）", Value = { Min = 10, Max = 60, Default = 30 }, Callback = function(v)
 	cfg.threshold = v / 100
+end})
+T1:Toggle({ Title = "人类化（随机抖动 + 故意失误，防踢）", Value = true, Callback = function(v)
+	cfg.humanOn = v
+	WindUI:Notify({ Title = "人类化", Content = v and "已开启：间隔/坐标/按压时长随机，并故意漏挡" or "已关闭：变成固定节拍，容易被踢", Duration = 5 })
+end})
+T1:Slider({ Title = "故意失误率（0–30%，越大越安全）", Value = { Min = 0, Max = 30, Default = 12 }, Callback = function(v)
+	cfg.missRate = v / 100
 end})
 T1:Slider({ Title = "最小点击间隔（80–400 毫秒，防踢）", Value = { Min = 80, Max = 400, Default = 120 }, Callback = function(v)
 	cfg.minGap = v / 1000
