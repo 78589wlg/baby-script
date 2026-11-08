@@ -1,4 +1,4 @@
--- 婴儿脚本 · Blade Ball V11
+-- 婴儿脚本 · Blade Ball V12
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
@@ -7,6 +7,7 @@
 -- V9：取消失误率，反应延迟 150~600ms 随机
 -- V10：加距离限制，球进入设定格数内才格挡（太远挡了服务端不认，球打不回去）
 -- V11：延迟严格受剩余飞行时间约束（最多用 60%），贴脸走紧急通道绕过节流，解决漏挡被球打死
+-- V12：去掉按球对象记录的锁（游戏复用球实例会导致第二回合永久失效），改为时间戳 + 重生重置
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -165,6 +166,8 @@ local function trigger(isAuto, urgent)
 	end
 	if now - lastAct < gap then return end
 	lastAct = now
+	S.lastFire = now
+	S.fires = S.fires + 1
 	if cfg.mode == "key" then
 		pressKey()
 	elseif cfg.mode == "remote" then
@@ -194,7 +197,21 @@ local function lockedBallCount()
 end
 
 -- 只处理 target 指向我的球（游戏自己写这个属性，比几何判断准）
-local pending = {}
+-- 不用 table 记录球对象：游戏可能复用同一个球实例，会导致永久锁死（第二回合失效）
+local S = {
+	pBall = nil,     -- 正在等待触发的球
+	pAt = 0,         -- 该球开始等待的时间
+	pTTL = 1.2,      -- 等待超时，超过就允许重新触发
+	beats = 0,       -- 主循环心跳计数（诊断用）
+	balls = 0,       -- 最近一帧扫到的球数
+	mine = 0,        -- 最近一帧锁定我的球数
+	lastFire = 0,    -- 最近一次实际点屏幕的时间
+	fires = 0,       -- 累计点击次数
+}
+
+local function resetState()
+	S.pBall, S.pAt = nil, 0
+end
 local function checkBall(b, root)
 	if not b or not b.Parent then return end
 	if b:GetAttribute("target") ~= LP.Name then return end
@@ -216,8 +233,9 @@ local function checkBall(b, root)
 	local pointBlank = dist <= pD
 
 	if pointBlank or (near and eta <= thr) then
-		if pending[b] then return end
-		pending[b] = true
+		local now = os.clock()
+		if S.pBall == b and (now - S.pAt) < S.pTTL then return end
+		S.pBall, S.pAt = b, now
 
 		-- 人类反应时间，但绝不能超过剩余飞行时间，否则必漏
 		local waitT = 0
@@ -235,7 +253,7 @@ local function checkBall(b, root)
 		end
 
 		task.delay(waitT, function()
-			pending[b] = nil
+			if S.pBall == b then S.pBall = nil end
 			if b and b.Parent then
 				-- 到点后再确认一次距离，超时太久的球直接放弃
 				local r2 = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
@@ -251,16 +269,24 @@ end
 task.spawn(function()
 	while true do
 		RUN.Heartbeat:Wait()
+		S.beats = S.beats + 1
 		if cfg.mode == "smart" then
+			pcall(function()
 			local ch = LP.Character
 			local hum = ch and ch:FindFirstChildOfClass("Humanoid")
 			local root = ch and ch:FindFirstChild("HumanoidRootPart")
 			local folder = ballFolder()
 			if root and hum and hum.Health > 0 and folder then
-				for _, b in ipairs(folder:GetChildren()) do
+				local list = folder:GetChildren()
+				S.balls = #list
+				local m = 0
+				for _, b in ipairs(list) do
+					if b:GetAttribute("target") == LP.Name then m = m + 1 end
 					pcall(checkBall, b, root)
 				end
+				S.mine = m
 			end
+			end)
 		end
 	end
 end)
@@ -277,7 +303,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V11" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V12" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -409,7 +435,12 @@ local function applyHum()
 	local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
 	if h then pcall(function() h.WalkSpeed = sp end) end
 end
-LP.CharacterAdded:Connect(function() task.wait(0.6) pcall(applyHum) end)
+LP.CharacterAdded:Connect(function()
+	resetState()
+	lastAct = 0
+	task.wait(0.6)
+	pcall(applyHum)
+end)
 
 -- ================= UI =================
 T1:Section({ Title = "格挡模式（点一个）" })
@@ -477,7 +508,13 @@ T1:Button({ Title = "诊断状态（自动复制）", Callback = function()
 	local mine = lockedBallCount()
 	local cam = WS.CurrentCamera
 
-	local txt = "ParryAttempt=" .. (ev and "存在" or "不存在")
+	local since = os.clock() - (S.lastFire or 0)
+	local txt = "【运行】模式=" .. tostring(cfg.mode)
+		.. " | 心跳=" .. tostring(S.beats)
+		.. " | 球=" .. tostring(S.balls) .. " 锁定我=" .. tostring(S.mine)
+		.. " | 累计点击=" .. tostring(S.fires)
+		.. " | 上次点击=" .. (S.lastFire > 0 and (string.format("%.1f", since) .. "秒前") or "从未")
+		.. "\n【远程】ParryAttempt=" .. (ev and "存在" or "不存在")
 		.. " | 相机=" .. (cam and "有" or "无")
 		.. " | 球总数=" .. total .. " 锁定我=" .. mine
 		.. " | 参数模式=" .. (cfg.fullArgs and "完整" or "空")
