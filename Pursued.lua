@@ -71,7 +71,6 @@ local T3 = Win:Tab({Title = "工具", Icon = "wrench"})
 local cfg = {
 	doorOn = true,
 	lootOn = false,
-	mobOn = false,
 	playerOn = false,
 	distOn = true,
 	autoDoor = false,
@@ -80,7 +79,6 @@ local cfg = {
 
 local DOOR_FOLDER_KW = {"halloweendoor", "door"}
 local LOOT_KW = {"shard", "soul", "candy", "treat", "pickup", "coin", "gem", "collectible", "relic", "orb"}
-local MOB_KW = {"nightmare", "monster", "enemy", "mimic", "killer", "hunter", "chaser", "entity", "boss"}
 local SKIP_KW = {"effect", "sound", "particle", "gui", "camera", "hint", "prompt", "trigger"}
 
 -- ================= ESP 基础 =================
@@ -230,7 +228,7 @@ end
 
 -- ================= 刷新循环 =================
 local nearestDoor, nearestLoot
-local stats = {doors = 0, loot = 0, mobs = 0}
+local stats = {doors = 0, loot = 0}
 
 local function refresh()
 	local wanted = {}
@@ -279,24 +277,6 @@ local function refresh()
 		end
 	else
 		stats.loot = 0
-	end
-
-	if cfg.mobOn then
-		local mobs = collectByKW(MOB_KW, 60)
-		stats.mobs = #mobs
-		for _, o in ipairs(mobs) do
-			local part = o.part
-			if part and part.Parent then
-				local txt = o.label
-				if cfg.distOn and root then
-					txt = txt .. " [" .. math.floor((root.Position - part.Position).Magnitude) .. "]"
-				end
-				setTag(part, "mob", txt, Color3.fromRGB(255, 40, 200))
-				wanted[part] = true
-			end
-		end
-	else
-		stats.mobs = 0
 	end
 
 	if cfg.playerOn and root then
@@ -488,14 +468,6 @@ T1:Toggle({Title = "碎片 / 糖果透视（黄色）", Value = false, Callback 
 		end
 	end
 end})
-T1:Toggle({Title = "怪物透视（紫色）", Value = false, Callback = function(v)
-	cfg.mobOn = v
-	if not v then
-		for part, t in pairs(tags) do
-			if t.kind == "mob" then killTag(t) tags[part] = nil end
-		end
-	end
-end})
 T1:Toggle({Title = "玩家透视（蓝色）", Value = false, Callback = function(v)
 	cfg.playerOn = v
 	if not v then
@@ -506,8 +478,8 @@ T1:Toggle({Title = "玩家透视（蓝色）", Value = false, Callback = functio
 end})
 
 T1:Section({Title = "说明"})
-T1:Button({Title = "目标/怪物透视扫不到东西？点这里看原因", Callback = function()
-	WindUI:Notify({Title = "透视说明", Content = "碎片和怪物是按名字关键字扫的，不同章节可能改名。把开关关掉再打开会重新扫描一次。", Duration = 7})
+T1:Button({Title = "碎片透视扫不到东西？点这里看原因", Callback = function()
+	WindUI:Notify({Title = "透视说明", Content = "碎片是按名字关键字扫的，不同章节可能改名。把开关关掉再打开会重新扫描一次。", Duration = 7})
 end})
 
 T2:Section({Title = "移动"})
@@ -549,7 +521,7 @@ end})
 T3:Button({Title = "重新扫描地图", Callback = function()
 	pcall(refresh)
 	pcall(hookDoorsForUsed)
-	WindUI:Notify({Title = "扫描", Content = "门 " .. stats.doors .. " 个｜目标 " .. stats.loot .. " 个｜怪物 " .. stats.mobs .. " 个", Duration = 5})
+	WindUI:Notify({Title = "扫描", Content = "门 " .. stats.doors .. " 个｜目标 " .. stats.loot .. " 个", Duration = 5})
 end})
 T3:Button({Title = "查看反踢出状态", Callback = function()
 	WindUI:Notify({Title = "反踢出", Content = AK.on and ("已启用，已拦截 " .. AK.blocked .. " 次") or "挂载失败，执行器不支持", Duration = 5})
