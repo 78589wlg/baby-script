@@ -1,7 +1,7 @@
--- 婴儿脚本 · Blade Ball V4
+-- 婴儿脚本 · Blade Ball V5
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
--- V4 关键修复：ParryAttempt 必须带 4 个参数，空参数调用会被服务端直接丢弃
+-- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -10,12 +10,15 @@ local WS = game:GetService("Workspace")
 local RUN = game:GetService("RunService")
 
 local cfg = {
-	mode = "off",        -- off / smart / spam / key
+	mode = "off",        -- off / smart / spam / remote / key
 	threshold = 0.30,    -- 剩余飞行秒数小于它才格挡
 	spamGap = 0.05,
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
+	useTap = true,       -- 优先模拟触摸（这游戏格挡走本地判定）
+	tapX = 0.50,         -- 点击位置：屏宽比例
+	tapY = 0.62,         -- 点击位置：屏高比例
 	ballESP = true,
 	playerESP = false,
 	distTag = true,
@@ -88,14 +91,52 @@ local function pressKey()
 	end)
 end
 
+-- ================= 模拟触摸（关键：这游戏格挡走本地判定，不发远程） =================
+local lastTapOk, lastTapErr = false, "未执行"
+
+local function tapScreen()
+	local cam = WS.CurrentCamera
+	local vp = (cam and cam.ViewportSize) or Vector2.new(800, 600)
+	local x = math.floor(vp.X * (cfg.tapX or 0.5))
+	local y = math.floor(vp.Y * (cfg.tapY or 0.62))
+
+	local VIM = game:GetService("VirtualInputManager")
+	local ok, err = pcall(function()
+		VIM:SendMouseButtonEvent(x, y, 0, true, game, 1)
+		task.wait(0.012)
+		VIM:SendMouseButtonEvent(x, y, 0, false, game, 1)
+	end)
+	if ok then lastTapOk, lastTapErr = true, ("VIM @" .. x .. "," .. y) return true end
+
+	if type(mouse1click) == "function" then
+		local s2 = pcall(mouse1click)
+		if s2 then lastTapOk, lastTapErr = true, "mouse1click" return true end
+	end
+
+	if touchscreen and type(touchscreen.tap) == "function" then
+		local s3 = pcall(function() touchscreen.tap(x, y) end)
+		if s3 then lastTapOk, lastTapErr = true, ("touchscreen @" .. x .. "," .. y) return true end
+	end
+
+	lastTapOk, lastTapErr = false, ("失败：" .. tostring(err))
+	return false
+end
+
 local function trigger()
 	local now = os.clock()
 	if now - lastAct < 0.025 then return end
 	lastAct = now
 	if cfg.mode == "key" then
 		pressKey()
-	else
+	elseif cfg.mode == "remote" then
 		doParryAct()
+	else
+		-- smart / spam / tap 都走模拟触摸
+		if cfg.useTap then
+			if not tapScreen() then doParryAct() end
+		else
+			doParryAct()
+		end
 	end
 end
 
@@ -133,7 +174,7 @@ end
 task.spawn(function()
 	while true do
 		RUN.Heartbeat:Wait()
-		if cfg.mode == "smart" or cfg.mode == "key" then
+		if cfg.mode == "smart" then
 			local ch = LP.Character
 			local hum = ch and ch:FindFirstChildOfClass("Humanoid")
 			local root = ch and ch:FindFirstChild("HumanoidRootPart")
@@ -152,28 +193,29 @@ task.spawn(function()
 	while true do
 		task.wait(cfg.spamGap)
 		if cfg.mode == "spam" then
-			pcall(doParryAct)
+			pcall(trigger)
 		end
 	end
 end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V4" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V5" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
 
-local LABEL = { off = "关闭", smart = "智能", spam = "狂点", key = "模拟按键" }
+local LABEL = { off = "关闭", smart = "智能触摸", spam = "狂点触摸", key = "模拟按键", remote = "发远程" }
 
 local function setMode(m)
 	cfg.mode = m
 	WindUI:Notify({
 		Title = "格挡：" .. LABEL[m],
 		Content = m == "off" and "已停止"
-			or (m == "spam" and "每 " .. math.floor(cfg.spamGap * 1000) .. " 毫秒发一次"
-			or (m == "key" and ("模拟按 " .. (cfg.keyName or "F") .. " 键")
-			or "球锁定你时自动格挡")),
+			or (m == "spam" and ("每 " .. math.floor(cfg.spamGap * 1000) .. " 毫秒点一次屏幕"))
+			or (m == "key" and ("模拟按 " .. (cfg.keyName or "F") .. " 键"))
+			or (m == "remote" and "发 ParryAttempt 远程（本服无效）")
+			or "球锁定你时自动点屏幕",
 		Duration = 4,
 	})
 end
@@ -294,9 +336,9 @@ LP.CharacterAdded:Connect(function() task.wait(0.6) pcall(applyHum) end)
 
 -- ================= UI =================
 T1:Section({ Title = "格挡模式（点一个）" })
-T1:Button({ Title = "① 智能格挡（推荐）", Callback = function() setMode("smart") end })
-T1:Button({ Title = "② 狂点模式", Callback = function() setMode("spam") end })
-T1:Button({ Title = "③ 模拟按键", Callback = function() setMode("key") end })
+T1:Button({ Title = "① 智能格挡（模拟触摸，推荐）", Callback = function() setMode("smart") end })
+T1:Button({ Title = "② 狂点触摸（无冷却，最暴力）", Callback = function() setMode("spam") end })
+T1:Button({ Title = "③ 发远程（本服无效，备用）", Callback = function() setMode("remote") end })
 T1:Button({ Title = "关闭自动格挡", Callback = function() setMode("off") end })
 
 T1:Section({ Title = "参数" })
@@ -308,6 +350,12 @@ T1:Slider({ Title = "狂点间隔（30–200 毫秒）", Value = { Min = 30, Max
 end})
 T1:Slider({ Title = "格挡参数1（0.10–1.00）", Value = { Min = 10, Max = 100, Default = 50 }, Callback = function(v)
 	cfg.arg1 = v / 100
+end})
+T1:Slider({ Title = "点击位置 X（0.20–0.80）", Value = { Min = 20, Max = 80, Default = 50 }, Callback = function(v)
+	cfg.tapX = v / 100
+end})
+T1:Slider({ Title = "点击位置 Y（0.20–0.85）", Value = { Min = 20, Max = 85, Default = 62 }, Callback = function(v)
+	cfg.tapY = v / 100
 end})
 T1:Toggle({ Title = "发送完整参数（关掉=空参数）", Value = true, Callback = function(v)
 	cfg.fullArgs = v
@@ -331,17 +379,19 @@ T1:Button({ Title = "诊断状态（自动复制）", Callback = function()
 		.. " | 相机=" .. (cam and "有" or "无")
 		.. " | 球总数=" .. total .. " 锁定我=" .. mine
 		.. " | 参数模式=" .. (cfg.fullArgs and "完整" or "空")
+		.. " | 触摸=" .. (lastTapOk and "可用" or "未成功")
+		.. " | 方式=" .. tostring(lastTapErr)
 
 	if setclipboard then pcall(setclipboard, txt) end
 	WindUI:Notify({ Title = "诊断（已复制）", Content = txt, Duration = 10 })
 end})
 
-T1:Button({ Title = "手动格挡一次（测试）", Callback = function()
-	local ok = doParryAct()
+T1:Button({ Title = "测试：点一下屏幕（看有无格挡动作）", Callback = function()
+	local ok = tapScreen()
 	WindUI:Notify({
-		Title = "测试",
-		Content = ok and "已发送，看人物有没有格挡动作" or "发送失败（ParryAttempt 不存在或角色未加载）",
-		Duration = 6,
+		Title = ok and "已点击屏幕" or "点击失败",
+		Content = ok and ("方式：" .. lastTapErr .. "｜看人物有没有格挡动作") or lastTapErr,
+		Duration = 8,
 	})
 end})
 
