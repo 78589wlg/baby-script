@@ -1,5 +1,5 @@
 -- 婴儿脚本 · 被追捕（HUNTED）V1
--- 门透视 / 碎片透视 / 怪物透视 / 穿墙 / 速度 / 全亮 / 自动开门 / 传送
+-- 门透视 / 碎片透视 / 穿墙 / 速度 / 全亮 / 自动开门 / 传送
 -- 适配：HUNTED [HALLOWEEN EVENT] (PlaceId 136431686349723)
 
 local P = game:GetService("Players")
@@ -204,7 +204,7 @@ local function collectDoors()
 	return out
 end
 
--- ================= 找目标 / 怪物 =================
+-- ================= 找目标 =================
 local function scanInto(root, depth, kws, out, limit)
 	if depth < 0 then return end
 	for _, o in ipairs(root:GetChildren()) do
@@ -459,7 +459,7 @@ T1:Toggle({Title = "门透视（红色 / 已用变绿）", Value = true, Callbac
 end})
 T1:Toggle({Title = "显示距离", Value = true, Callback = function(v) cfg.distOn = v end})
 
-T1:Section({Title = "目标与怪物"})
+T1:Section({Title = "目标"})
 T1:Toggle({Title = "碎片 / 糖果透视（黄色）", Value = false, Callback = function(v)
 	cfg.lootOn = v
 	if not v then
