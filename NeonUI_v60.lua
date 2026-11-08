@@ -5,6 +5,7 @@ local sp,jp=16,50
 local Win=WindUI:CreateWindow({Title="婴儿脚本"})
 local ok=false
 local T2,T3,T4,T5
+local ntHeartStart
 local G="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/"
 local PM={[537413528]=G.."Boat_v37.lua",[98502499119821]=G.."Fish_v2.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua"}
 local subLoaded=false
@@ -235,6 +236,7 @@ for _,x in ipairs({T2,T3,T4,T5})do
 if x then pcall(function()x.Locked=false x:UnlockAll()end)end
 end
 getgenv().babyKey=KEY
+if ntHeartStart then pcall(ntHeartStart) end
 if silent then
 WindUI:Notify({Title="婴儿脚本",Content="上次的卡密仍然有效，已自动登录",Duration=4})
 else
@@ -517,6 +519,20 @@ local b=tostring(LP.UserId).."|"..ntClean(LP.DisplayName).."|"..ntClean(LP.Name)
 return ntPost(NT..ntTopic(),b)
 end
 
+-- 常驻心跳：与两个开关无关，脚本一解锁就一直上报（这样别人关掉开关也能被你看到）
+local ntHeartOn=false
+ntHeartStart=function()
+if ntHeartOn then return end
+ntHeartOn=true
+task.spawn(function()
+while ntHeartOn do
+pcall(ntBeat)
+local n=0
+while ntHeartOn and n<60 do task.wait(1) n=n+1 end
+end
+end)
+end
+
 local function ntFetch()
 local ok,txt=pcall(function()return game:HttpGet(NT..ntTopic().."/json?poll=1&since=15m")end)
 if not ok or type(txt)~="string" then return false end
@@ -681,16 +697,6 @@ while ntOn and n<gap do task.wait(1) n=n+1 end
 end
 end)
 task.spawn(function()
-local c=0
-while ntOn do
-if ntOn then pcall(ntBeat) end
-c=c+1
-local gap=60
-local n=0
-while ntOn and n<gap do task.wait(1) n=n+1 end
-end
-end)
-task.spawn(function()
 while ntOn do
 task.wait(2)
 if espOn then pcall(espApply) end
@@ -723,9 +729,9 @@ else
 ntDropHud()
 if not espOn then
 ntStop()
-WindUI:Notify({Title="脚本用户检测",Content="已关闭",Duration=2})
+WindUI:Notify({Title="脚本用户检测",Content="小窗已关闭｜你的心跳仍在上报，别人依然看得到你",Duration=5})
 else
-WindUI:Notify({Title="脚本用户检测",Content="小窗已关闭，变绿仍在生效",Duration=4})
+WindUI:Notify({Title="脚本用户检测",Content="小窗已关闭，变绿仍生效｜你依然在别人的名单里",Duration=5})
 end
 end
 end})
@@ -745,7 +751,7 @@ end)
 else
 espClear()
 if not hudOn then ntStop() end
-WindUI:Notify({Title="脚本使用者",Content="已关闭",Duration=2})
+WindUI:Notify({Title="脚本使用者",Content="已关闭｜你依然在别人的名单里（心跳常驻）",Duration=5})
 end
 end})
 T4:Button({Title="刷新在线名单",Callback=function()
