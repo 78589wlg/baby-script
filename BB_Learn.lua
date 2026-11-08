@@ -1,7 +1,6 @@
--- Blade Ball 格挡调用学习器 V2
--- 作用：录下游戏自己发格挡时用的「远程名 + 真实参数」，用来还原正确调用
--- V2：全自动复制，不需要点任何按钮
--- 用法：loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BB_Learn.lua?v=2"))()
+-- Blade Ball 格挡调用学习器 V3
+-- V3：面板缩成右上角小胶囊，不挡点击；自动复制；实时显示球数
+-- 用法：loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BB_Learn.lua?v=3"))()
 
 local RS = game:GetService("ReplicatedStorage")
 local WS = game:GetService("Workspace")
@@ -9,26 +8,18 @@ local UIS = game:GetService("UserInputService")
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
 
--- 剪贴板兼容（不同执行器函数名不同）
 local function copyToClip(t)
 	if type(t) ~= "string" or t == "" then return false end
 	if setclipboard then
-		local ok = pcall(setclipboard, t)
-		if ok then return true end
+		if pcall(setclipboard, t) then return true end
 	end
 	if toclipboard then
-		local ok = pcall(toclipboard, t)
-		if ok then return true end
-	end
-	if Clipboard and Clipboard.set then
-		local ok = pcall(function() Clipboard.set(t) end)
-		if ok then return true end
+		if pcall(toclipboard, t) then return true end
 	end
 	return false
 end
 
--- 启动即验证剪贴板
-local clipOK = copyToClip("BB_Learn 已启动｜请手动格挡 2~3 次，内容会自动写入剪贴板")
+local clipOK = copyToClip("BB_Learn 已启动")
 
 local log = {}
 local MAX = 60
@@ -81,22 +72,15 @@ local function interesting(name)
 	return false
 end
 
--- 环境快照
-do
-	local rm = RS:FindFirstChild("Remotes")
-	local pa = rm and rm:FindFirstChild("ParryAttempt")
-	local folder = WS:FindFirstChild("Balls")
-	push("== 环境 ==")
-	push("ParryAttempt = " .. (pa and "存在" or "不存在"))
-	push("Balls 文件夹 = " .. (folder and ("存在，" .. #folder:GetChildren() .. " 个球") or "不存在"))
-	push("Alive 文件夹 = " .. (WS:FindFirstChild("Alive") and "存在" or "不存在"))
-	push("执行器 = " .. tostring(identifyexecutor and identifyexecutor() or "未知"))
-	push("剪贴板 = " .. (clipOK and "可用" or "不可用"))
-	push("")
-end
+local rm = RS:FindFirstChild("Remotes")
+local pa = rm and rm:FindFirstChild("ParryAttempt")
+push("== 环境 ==")
+push("ParryAttempt = " .. (pa and "存在" or "不存在"))
+push("执行器 = Delta｜剪贴板 = " .. (clipOK and "可用" or "不可用"))
+push("")
 
 local hooked = false
-local okHook = pcall(function()
+pcall(function()
 	local old
 	old = hookmetamethod(game, "__namecall", function(self, ...)
 		local m = getnamecallmethod()
@@ -116,21 +100,19 @@ local okHook = pcall(function()
 	hooked = true
 end)
 
--- 按键 / 鼠标
+-- 按键 / 触摸（不再丢弃 gp，反而要标出来）
 pcall(function()
 	UIS.InputBegan:Connect(function(input, gp)
-		if gp then return end
-		push("[按] " .. tostring(input.UserInputType) .. " / " .. tostring(input.KeyCode))
+		push("[按] " .. tostring(input.UserInputType) .. " gp=" .. tostring(gp))
 	end)
 end)
 
--- 服务端回包
 pcall(function()
 	task.spawn(function()
-		local rm = RS:WaitForChild("Remotes", 20)
-		if not rm then return end
-		for _, n in ipairs({ "ParrySuccess", "ParrySuccessAll", "TimesParriedUpdate", "VisualCD", "UnParry", "SetParryType" }) do
-			local ev = rm:FindFirstChild(n)
+		local r = RS:WaitForChild("Remotes", 20)
+		if not r then return end
+		for _, n in ipairs({ "ParrySuccess", "ParrySuccessAll", "TimesParriedUpdate", "VisualCD", "UnParry" }) do
+			local ev = r:FindFirstChild(n)
 			if ev and ev:IsA("RemoteEvent") then
 				ev.OnClientEvent:Connect(function(...)
 					local args = table.pack(...)
@@ -145,7 +127,7 @@ pcall(function()
 	end)
 end)
 
--- 界面
+-- ================= 界面 =================
 local parent
 if gethui then
 	local ok, h = pcall(gethui)
@@ -164,41 +146,58 @@ sg.IgnoreGuiInset = true
 sg.DisplayOrder = 999
 sg.Parent = parent
 
+-- ---- 小胶囊（默认显示，右上角，不挡操作）----
+local pill = Instance.new("TextButton")
+pill.Size = UDim2.new(0, 200, 0, 42)
+pill.Position = UDim2.new(1, -212, 0, 96)
+pill.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+pill.BackgroundTransparency = 0.08
+pill.Text = "记录 0 条｜局外"
+pill.Font = Enum.Font.GothamBold
+pill.TextSize = 13
+pill.TextColor3 = Color3.fromRGB(120, 220, 255)
+pill.BorderSizePixel = 0
+pill.AutoButtonColor = true
+pill.Parent = sg
+local pc1 = Instance.new("UICorner") pc1.CornerRadius = UDim.new(0, 21) pc1.Parent = pill
+local pst = Instance.new("UIStroke") pst.Color = Color3.fromRGB(80, 180, 255) pst.Thickness = 1.2 pst.Parent = pill
+
+-- ---- 大面板（默认隐藏）----
 local fr = Instance.new("Frame")
-fr.Size = UDim2.new(0, 560, 0, 440)
-fr.Position = UDim2.new(0.5, -280, 0.5, -220)
+fr.Size = UDim2.new(0, 540, 0, 400)
+fr.Position = UDim2.new(0.5, -270, 0.5, -200)
 fr.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
 fr.BorderSizePixel = 0
+fr.Visible = false
 fr.Parent = sg
 local c1 = Instance.new("UICorner") c1.CornerRadius = UDim.new(0, 10) c1.Parent = fr
 local st = Instance.new("UIStroke") st.Color = Color3.fromRGB(80, 180, 255) st.Thickness = 1.5 st.Parent = fr
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -140, 0, 34)
+title.Size = UDim2.new(1, -160, 0, 34)
 title.Position = UDim2.new(0, 14, 0, 8)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 title.TextColor3 = Color3.fromRGB(120, 220, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = hooked and "学习中｜手动格挡 2~3 次，自动复制" or "hook 失败：执行器不支持"
+title.Text = hooked and "记录中｜自动复制" or "hook 失败"
 title.Parent = fr
 
-local xBtn = Instance.new("TextButton")
-xBtn.Size = UDim2.new(0, 30, 0, 30)
-xBtn.Position = UDim2.new(1, -40, 0, 8)
-xBtn.BackgroundColor3 = Color3.fromRGB(190, 55, 55)
-xBtn.Text = "X"
-xBtn.Font = Enum.Font.GothamBold
-xBtn.TextSize = 14
-xBtn.TextColor3 = Color3.new(1, 1, 1)
-xBtn.BorderSizePixel = 0
-xBtn.Parent = fr
-local c4 = Instance.new("UICorner") c4.CornerRadius = UDim.new(0, 6) c4.Parent = xBtn
-xBtn.Activated:Connect(function() sg:Destroy() end)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 90, 0, 30)
+closeBtn.Position = UDim2.new(1, -104, 0, 8)
+closeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+closeBtn.Text = "收起"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 13
+closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = fr
+local c4 = Instance.new("UICorner") c4.CornerRadius = UDim.new(0, 6) c4.Parent = closeBtn
 
 local tb = Instance.new("TextBox")
-tb.Size = UDim2.new(1, -28, 1, -104)
+tb.Size = UDim2.new(1, -28, 1, -96)
 tb.Position = UDim2.new(0, 14, 0, 46)
 tb.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 tb.TextColor3 = Color3.fromRGB(210, 220, 225)
@@ -214,31 +213,47 @@ tb.Text = ""
 tb.Parent = fr
 local c2 = Instance.new("UICorner") c2.CornerRadius = UDim.new(0, 8) c2.Parent = tb
 
--- 大按钮（同时绑 Activated 和 MouseButton1Click，触摸也能点）
-local bigBtn = Instance.new("TextButton")
-bigBtn.Size = UDim2.new(1, -28, 0, 44)
-bigBtn.Position = UDim2.new(0, 14, 1, -50)
-bigBtn.BackgroundColor3 = Color3.fromRGB(35, 140, 90)
-bigBtn.Text = "点这里复制（不点也会自动复制）"
-bigBtn.Font = Enum.Font.GothamBold
-bigBtn.TextSize = 15
-bigBtn.TextColor3 = Color3.new(1, 1, 1)
-bigBtn.BorderSizePixel = 0
-bigBtn.Parent = fr
-local c5 = Instance.new("UICorner") c5.CornerRadius = UDim.new(0, 8) c5.Parent = bigBtn
+local copyBtn = Instance.new("TextButton")
+copyBtn.Size = UDim2.new(1, -28, 0, 40)
+copyBtn.Position = UDim2.new(0, 14, 1, -48)
+copyBtn.BackgroundColor3 = Color3.fromRGB(35, 140, 90)
+copyBtn.Text = "复制（也会自动复制）"
+copyBtn.Font = Enum.Font.GothamBold
+copyBtn.TextSize = 14
+copyBtn.TextColor3 = Color3.new(1, 1, 1)
+copyBtn.BorderSizePixel = 0
+copyBtn.Parent = fr
+local c5 = Instance.new("UICorner") c5.CornerRadius = UDim.new(0, 8) c5.Parent = copyBtn
 
-local lastClick = 0
-local function doCopy()
-	if os.clock() - lastClick < 0.4 then return end
-	lastClick = os.clock()
-	local txt = table.concat(log, "\n")
-	local ok = copyToClip(txt)
-	title.Text = ok and ("已复制 " .. #log .. " 条，去粘贴吧") or "剪贴板不可用，请手动选中文本框复制"
+-- 事件：优先 Activated（触摸/鼠标都触发）
+local function bind(btn, fn)
+	local busy = false
+	local function run()
+		if busy then return end
+		busy = true
+		pcall(fn)
+		task.delay(0.35, function() busy = false end)
+	end
+	pcall(function() btn.Activated:Connect(run) end)
+	pcall(function() btn.MouseButton1Click:Connect(run) end)
 end
-bigBtn.Activated:Connect(doCopy)
-bigBtn.MouseButton1Click:Connect(doCopy)
 
--- 自动同步 + 自动复制
+bind(pill, function()
+	fr.Visible = true
+	pill.Visible = false
+end)
+
+bind(closeBtn, function()
+	fr.Visible = false
+	pill.Visible = true
+end)
+
+bind(copyBtn, function()
+	local ok = copyToClip(table.concat(log, "\n"))
+	title.Text = ok and ("已复制 " .. #log .. " 条") or "剪贴板不可用"
+end)
+
+-- 自动同步 + 自动复制 + 球数提示
 local lastTxt = ""
 task.spawn(function()
 	while sg.Parent do
@@ -246,14 +261,17 @@ task.spawn(function()
 		if txt ~= lastTxt then
 			tb.Text = txt
 			if dirty and #log > 0 then
-				local ok = copyToClip(txt)
-				if ok then
-					title.Text = "已自动复制 " .. #log .. " 条｜手动格挡 2~3 次"
-				end
-				dirty = false
+				if copyToClip(txt) then dirty = false end
 			end
 			lastTxt = txt
 		end
+
+		local folder = WS:FindFirstChild("Balls")
+		local n = folder and #folder:GetChildren() or 0
+		pill.Text = "记录 " .. #log .. " 条｜" .. (n > 0 and ("局内 " .. n .. " 球") or "局外") .. "｜点开"
+		pill.TextColor3 = n > 0 and Color3.fromRGB(120, 255, 170) or Color3.fromRGB(255, 180, 90)
+
 		task.wait(0.35)
 	end
 end)
+
