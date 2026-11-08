@@ -16,6 +16,7 @@ local cfg = {
 	ballESP = true,
 	playerESP = false,
 	distTag = true,
+	keyName = "F",
 }
 
 -- ================= 格挡远程探测 =================
@@ -83,7 +84,7 @@ local function scanRemotes()
 	return CAB
 end
 
-local lastParry = 0
+local lastAct = 0
 
 local function fireOne(r)
 	if not r or not r.Parent then return false end
@@ -94,14 +95,43 @@ local function fireOne(r)
 	return pcall(function() r:FireServer() end)
 end
 
-local function doParry()
-	local now = os.clock()
-	if now - lastParry < 0.04 then return end
+local function pressKey()
+	local name = cfg.keyName or "F"
+	local okc, kc = pcall(function() return Enum.KeyCode[name].Value end)
+
+	if keypress and keyrelease and okc then
+		local ok = pcall(function()
+			keypress(kc)
+			task.wait(0.015)
+			keyrelease(kc)
+		end)
+		if ok then return true end
+	end
+
+	return pcall(function()
+		local VIM = game:GetService("VirtualInputManager")
+		VIM:SendKeyEvent(true, name, false, game)
+		task.wait(0.015)
+		VIM:SendKeyEvent(false, name, false, game)
+	end)
+end
+
+local function doParryAct()
 	local list = scanRemotes()
 	if #list == 0 then return end
-	lastParry = now
 	for i = 1, math.min(#list, 3) do
 		if fireOne(list[i]) then return end
+	end
+end
+
+local function trigger()
+	local now = os.clock()
+	if now - lastAct < 0.025 then return end
+	lastAct = now
+	if cfg.mode == "key" then
+		pressKey()
+	else
+		doParryAct()
 	end
 end
 
@@ -207,7 +237,7 @@ local function checkBall(b, char, root)
 
 	-- 贴脸无条件格挡
 	if dist < 11 then
-		doParry()
+		trigger()
 		return
 	end
 
@@ -216,7 +246,7 @@ local function checkBall(b, char, root)
 
 	local toMe = root.Position - pos
 	if toMe.Magnitude < 0.1 then
-		doParry()
+		trigger()
 		return
 	end
 	toMe = toMe.Unit
@@ -226,13 +256,13 @@ local function checkBall(b, char, root)
 
 	local t = (dist - 7) / closing
 	if t <= cfg.threshold then
-		doParry()
+		trigger()
 		return
 	end
 
 	-- 距离骤降兜底（应对速度数据异常）
 	if prev and prev > dist and (prev - dist) > 3 and dist < 30 then
-		doParry()
+		trigger()
 	end
 end
 
@@ -240,12 +270,12 @@ end
 task.spawn(function()
 	while true do
 		RUN.Heartbeat:Wait()
-		if cfg.mode == "smart" or cfg.mode == "lock" then
+		if cfg.mode == "smart" or cfg.mode == "lock" or cfg.mode == "key" then
 			local char = LP.Character
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			local root = rootOf(char)
 			if root and hum and hum.Health > 0 then
-				if cfg.mode == "smart" or isLocked(char) then
+				if cfg.mode ~= "lock" or isLocked(char) then
 					for _, b in ipairs(getBalls()) do
 						pcall(checkBall, b, char, root)
 					end
@@ -277,6 +307,7 @@ local LABEL = {
 	smart = "智能预测",
 	lock = "锁定判定",
 	spam = "狂点",
+	key = "模拟按键",
 }
 
 local function setMode(m)
@@ -285,7 +316,8 @@ local function setMode(m)
 		Title = "格挡模式：" .. LABEL[m],
 		Content = m == "off" and "自动格挡已停止"
 			or (m == "spam" and "每 " .. math.floor(cfg.spamGap * 1000) .. " 毫秒发一次，最暴力"
-			or "球朝你飞来时会自动格挡"),
+			or (m == "key" and ("改为模拟按 " .. (cfg.keyName or "F") .. " 键，不发远程")
+			or "球朝你飞来时会自动格挡")),
 		Duration = 4,
 	})
 end
@@ -410,7 +442,15 @@ T1:Section({ Title = "格挡模式（点一个）" })
 T1:Button({ Title = "① 智能预测（推荐）", Callback = function() setMode("smart") end })
 T1:Button({ Title = "② 只在被锁定时格挡", Callback = function() setMode("lock") end })
 T1:Button({ Title = "③ 狂点模式（无冷却，最暴力）", Callback = function() setMode("spam") end })
+T1:Button({ Title = "④ 模拟按键（远程找不到时用）", Callback = function() setMode("key") end })
 T1:Button({ Title = "关闭自动格挡", Callback = function() setMode("off") end })
+
+T1:Input({ Title = "④ 模式用的按键（默认 F）", Placeholder = "F", Value = "F", Callback = function(t)
+	local v = tostring(t or ""):gsub("%s+", "")
+	if v == "" then v = "F" end
+	cfg.keyName = v:upper()
+	WindUI:Notify({ Title = "按键已设为 " .. cfg.keyName, Content = "切到「④ 模拟按键」后生效", Duration = 4 })
+end})
 
 T1:Section({ Title = "参数" })
 T1:Slider({ Title = "触发提前量（0.08–0.30 秒）", Value = { Min = 8, Max = 30, Default = 18 }, Callback = function(v)
