@@ -1,7 +1,8 @@
--- 婴儿脚本 · Blade Ball V5
+-- 婴儿脚本 · Blade Ball V6
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
+-- V6：该服有频率型反作弊，默认点击间隔放宽到 120ms，狂点模式 150ms
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -12,7 +13,8 @@ local RUN = game:GetService("RunService")
 local cfg = {
 	mode = "off",        -- off / smart / spam / remote / key
 	threshold = 0.30,    -- 剩余飞行秒数小于它才格挡
-	spamGap = 0.05,
+	spamGap = 0.15,
+	minGap = 0.12,       -- 两次点击的最小间隔（防反作弊频率检测）
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
@@ -124,7 +126,7 @@ end
 
 local function trigger()
 	local now = os.clock()
-	if now - lastAct < 0.025 then return end
+	if now - lastAct < (cfg.minGap or 0.12) then return end
 	lastAct = now
 	if cfg.mode == "key" then
 		pressKey()
@@ -200,7 +202,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V5" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V6" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -212,7 +214,7 @@ local function setMode(m)
 	WindUI:Notify({
 		Title = "格挡：" .. LABEL[m],
 		Content = m == "off" and "已停止"
-			or (m == "spam" and ("每 " .. math.floor(cfg.spamGap * 1000) .. " 毫秒点一次屏幕"))
+			or (m == "spam" and ("每 " .. math.floor(cfg.spamGap * 1000) .. " 毫秒点一次｜间隔太小会被踢"))
 			or (m == "key" and ("模拟按 " .. (cfg.keyName or "F") .. " 键"))
 			or (m == "remote" and "发 ParryAttempt 远程（本服无效）")
 			or "球锁定你时自动点屏幕",
@@ -345,7 +347,10 @@ T1:Section({ Title = "参数" })
 T1:Slider({ Title = "提前量（0.10–0.60 秒）", Value = { Min = 10, Max = 60, Default = 30 }, Callback = function(v)
 	cfg.threshold = v / 100
 end})
-T1:Slider({ Title = "狂点间隔（30–200 毫秒）", Value = { Min = 30, Max = 200, Default = 50 }, Callback = function(v)
+T1:Slider({ Title = "最小点击间隔（80–400 毫秒，防踢）", Value = { Min = 80, Max = 400, Default = 120 }, Callback = function(v)
+	cfg.minGap = v / 1000
+end})
+T1:Slider({ Title = "狂点间隔（100–400 毫秒）", Value = { Min = 100, Max = 400, Default = 150 }, Callback = function(v)
 	cfg.spamGap = v / 1000
 end})
 T1:Slider({ Title = "格挡参数1（0.10–1.00）", Value = { Min = 10, Max = 100, Default = 50 }, Callback = function(v)
