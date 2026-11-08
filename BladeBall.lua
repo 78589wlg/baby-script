@@ -1,8 +1,9 @@
--- 婴儿脚本 · Blade Ball V16
+-- 婴儿脚本 · Blade Ball V17
 -- 重写依据：多个公开开源源码（Tora / BobloScript / delta-scripts / gist E3vning）
 -- 统一做法：workspace.Balls 里 realBall 的 zoomies.VectorVelocity 算剩余飞行时间，
 --           Distance/Speed <= 0.75 时用 VirtualInputManager 点一下 (0,0)，每颗球只点一次。
 -- V16 同时去掉之前自己加的「连击冷却/反应延迟/失误率」——那些是漏挡和被踢的主因。
+-- V17：加每秒点击上限、点击时刻随机化、被踢记录 + 回来后自动续跑（queue_on_teleport）
 -- 被踢兜底：GuiService.ErrorMessageChanged → 自动重连同一服务器（真·防踢做不到，只能重进）
 
 local P = game:GetService("Players")
@@ -18,6 +19,7 @@ local cfg = {
 	lead = 0.75,        -- 剩余飞行时间 <= 这个值就点（开源默认 0.75）
 	pingComp = 0.00,    -- 网络补偿，卡就调大（0.05 ~ 0.15）
 	minGap = 0.10,      -- 两次点击最小间隔，防频率检测
+	maxPerSec = 3,      -- 每秒最多点几次（真人也就 2-3 下）
 	clickMode = "mouse",-- mouse / key / button
 	ballESP = true,
 	distTag = true,
@@ -70,9 +72,24 @@ end
 -- ================= 触发 =================
 local consumed, watched = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
 
+local recent = {}
+
+local function rateOK(now)
+	for i = #recent, 1, -1 do
+		if now - recent[i] > 1 then table.remove(recent, i) end
+	end
+	if #recent >= (cfg.maxPerSec or 3) then return false end
+	recent[#recent + 1] = now
+	return true
+end
+
 local function fire(reason)
 	local now = os.clock()
 	if now - (S.lastFire or 0) < cfg.minGap then return false end
+	if not rateOK(now) then
+		S.lastErr = "本秒已达上限，跳过"
+		return false
+	end
 	S.lastFire = now
 	S.fires = S.fires + 1
 
@@ -140,7 +157,8 @@ RUN.PreSimulation:Connect(function()
 
 		S.eta, S.dist, S.speed = eta, dist, sp
 
-		if eta <= cfg.lead + cfg.pingComp and not consumed[b] then
+		local jitter = math.random() * 0.03
+		if eta <= cfg.lead + cfg.pingComp + jitter and not consumed[b] then
 			consumed[b] = true
 			fire("eta=" .. string.format("%.2f", eta))
 		end
@@ -165,9 +183,17 @@ task.spawn(function()
 end)
 
 -- ================= 被踢 → 自动重连 =================
+local lastKick = ""
+local SELF_URL = "https://raw.githubusercontent.com/78589wlg/baby-script/main/BladeBall.lua?v=17"
+
 pcall(function()
 	game:GetService("GuiService").ErrorMessageChanged:Connect(function(msg)
 		if not msg or msg == "" then return end
+		lastKick = msg
+		-- 让执行器在重连后自动把脚本再跑一遍（支持的执行器才有效）
+		local code = 'loadstring(game:HttpGet("' .. SELF_URL .. '"))()'
+		pcall(function() if queue_on_teleport then queue_on_teleport(code) end end)
+		pcall(function() if queueonteleport then queueonteleport(code) end end)
 		task.wait(0.4)
 		pcall(function()
 			if #P:GetPlayers() <= 1 then
@@ -278,6 +304,7 @@ T1:Button({ Title = "诊断（自动复制）", Callback = function()
 		.. "\n【点击】次数=" .. tostring(S.fires)
 		.. " | 方式=" .. cfg.clickMode .. " | 上次=" .. tostring(S.lastErr)
 		.. " | 成功=" .. tostring(S.myOK)
+		.. "\n【被踢】" .. (lastKick ~= "" and lastKick or "无记录")
 		.. "\n【结构】Balls=" .. (f and "有" or "无")
 		.. " | zoomies=" .. (function()
 			local b = f and f:FindFirstChildOfClass("Part")
