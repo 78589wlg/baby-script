@@ -7,7 +7,7 @@ local ok=false
 local T2,T3,T4,T5
 local ntHeartStart
 local G="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/"
-local PM={[537413528]=G.."Boat_v37.lua",[98502499119821]=G.."Fish_v2.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua",[136431686349723]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Pursued.lua",[13772394625]="https://raw.githubusercontent.com/78589wlg/baby-script/main/BladeBall.lua?v=17"}
+local PM={[537413528]=G.."Boat_v37.lua",[98502499119821]=G.."Fish_v2.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua",[136431686349723]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Pursued.lua"}
 local subLoaded=false
 local function subAuto()
 local u=PM[game.PlaceId]
@@ -27,7 +27,7 @@ local PERM={"卡密制作婴儿脚本6767","少羽没面"}
 local KEY=PERM[1]
 local auto=true
 local done=false
-local AM={[537413528]=1,[98502499119821]=1,[90148635862803]=1,[107778070777162]=1,[79546208627805]=1,[10165583746]=1,[136431686349723]=1,[13772394625]=1}
+local AM={[537413528]=1,[98502499119821]=1,[90148635862803]=1,[107778070777162]=1,[79546208627805]=1,[10165583746]=1,[136431686349723]=1}
 
 -- ===== 卡密（支持 7 天动态卡 + 老卡密） =====
 local HSK=game:GetService("HttpService")
