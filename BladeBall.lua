@@ -1,10 +1,10 @@
--- 婴儿脚本 · Blade Ball V8
+-- 婴儿脚本 · Blade Ball V9
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
 -- V6：该服有频率型反作弊，默认点击间隔放宽到 120ms，狂点模式 150ms
 -- V7：按行为特征防踢（随机抖动 + 故意失误率），100% 格挡成功率是最明显的机器特征
--- V8：加入人类反应延迟（球锁定后随机等 100~240ms 再按），消除零延迟特征
+-- V9：取消失误率，反应延迟 150~600ms 随机
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -18,9 +18,9 @@ local cfg = {
 	spamGap = 0.15,
 	minGap = 0.12,       -- 两次点击的最小间隔（防反作弊频率检测）
 	humanOn = true,      -- 人类化：随机间隔/按压时长/坐标 + 故意失误
-	missRate = 0.12,     -- 故意不格挡的概率（100% 成功率是最明显的机器特征）
-	reactMin = 0.10,     -- 反应延迟下限（秒）：球锁定后不立刻点
-	reactMax = 0.24,     -- 反应延迟上限（秒）
+	missRate = 0,        -- 故意不格挡的概率（0 = 每颗都挡）
+	reactMin = 0.15,     -- 反应延迟下限（秒）：球锁定后不立刻点
+	reactMax = 0.60,     -- 反应延迟上限（秒）
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
@@ -255,7 +255,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V8" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V9" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -402,16 +402,16 @@ T1:Slider({ Title = "提前量（0.10–0.60 秒）", Value = { Min = 10, Max = 
 end})
 T1:Toggle({ Title = "人类化（随机抖动 + 故意失误，防踢）", Value = true, Callback = function(v)
 	cfg.humanOn = v
-	WindUI:Notify({ Title = "人类化", Content = v and "已开启：间隔/坐标/按压时长随机，并故意漏挡" or "已关闭：变成固定节拍，容易被踢", Duration = 5 })
+	WindUI:Notify({ Title = "人类化", Content = v and "已开启：间隔/坐标/按压时长/反应时间随机" or "已关闭：变成固定节拍，容易被踢", Duration = 5 })
 end})
-T1:Slider({ Title = "故意失误率（0–30%，越大越安全）", Value = { Min = 0, Max = 30, Default = 12 }, Callback = function(v)
+T1:Slider({ Title = "故意失误率（0–30%，0 = 每颗都挡）", Value = { Min = 0, Max = 30, Default = 0 }, Callback = function(v)
 	cfg.missRate = v / 100
 end})
-T1:Slider({ Title = "反应延迟下限（60–300 毫秒）", Value = { Min = 60, Max = 300, Default = 100 }, Callback = function(v)
+T1:Slider({ Title = "反应延迟下限（60–600 毫秒）", Value = { Min = 60, Max = 600, Default = 150 }, Callback = function(v)
 	cfg.reactMin = v / 1000
 	if cfg.reactMax < cfg.reactMin then cfg.reactMax = cfg.reactMin + 0.05 end
 end})
-T1:Slider({ Title = "反应延迟上限（60–400 毫秒）", Value = { Min = 60, Max = 400, Default = 240 }, Callback = function(v)
+T1:Slider({ Title = "反应延迟上限（60–600 毫秒）", Value = { Min = 60, Max = 600, Default = 600 }, Callback = function(v)
 	cfg.reactMax = v / 1000
 	if cfg.reactMin > cfg.reactMax then cfg.reactMin = math.max(0.06, cfg.reactMax - 0.05) end
 end})
