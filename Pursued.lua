@@ -71,6 +71,7 @@ local T3 = Win:Tab({Title = "工具", Icon = "wrench"})
 local cfg = {
 	doorOn = true,
 	lootOn = false,
+	crystalOn = false,
 	playerOn = false,
 	distOn = true,
 	autoDoor = false,
@@ -78,7 +79,7 @@ local cfg = {
 }
 
 local DOOR_FOLDER_KW = {"halloweendoor", "door"}
-local LOOT_KW = {"shard", "soul", "candy", "treat", "pickup", "coin", "gem", "collectible", "relic", "orb"}
+local LOOT_KW = {"shard", "soul", "crystal", "candy", "treat", "pickup", "coin", "gem", "collectible", "relic", "orb"}
 local SKIP_KW = {"effect", "sound", "particle", "gui", "camera", "hint", "prompt", "trigger"}
 
 -- ================= ESP 基础 =================
@@ -228,6 +229,7 @@ end
 
 -- ================= 刷新循环 =================
 local nearestDoor, nearestLoot
+local lootCache = {}
 local stats = {doors = 0, loot = 0}
 
 local function refresh()
@@ -257,8 +259,10 @@ local function refresh()
 		end
 	end
 
-	if cfg.lootOn then
+	lootCache = {}
+	if cfg.lootOn or cfg.crystalOn then
 		local loots = collectByKW(LOOT_KW, 120)
+		lootCache = loots
 		stats.loot = #loots
 		nearestLoot = nil
 		local best = math.huge
@@ -271,8 +275,10 @@ local function refresh()
 					txt = txt .. " [" .. dist .. "]"
 					if dist < best then best, nearestLoot = dist, part end
 				end
-				setTag(part, "loot", txt, Color3.fromRGB(255, 220, 60))
-				wanted[part] = true
+				if cfg.lootOn then
+					setTag(part, "loot", txt, Color3.fromRGB(255, 220, 60))
+					wanted[part] = true
+				end
 			end
 		end
 	else
@@ -342,6 +348,39 @@ task.spawn(function()
 				end
 			end)
 			if not ok then end
+		end
+	end
+end)
+
+-- ================= 自动吃水晶 =================
+task.spawn(function()
+	while true do
+		task.wait(0.3)
+		if cfg.crystalOn then
+			local ok = pcall(function()
+				local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+				if not root then return end
+				local best, bd = nil, math.huge
+				for _, o in ipairs(lootCache) do
+					local part = o.part
+					if part and part.Parent then
+						local d = (root.Position - part.Position).Magnitude
+						if d < bd then bd, best = d, o end
+					end
+				end
+				if not best or bd > 300 then return end
+				if bd > 6 then
+					root.CFrame = CFrame.new(best.part.Position + Vector3.new(0, 3, 0))
+				else
+					for _, x in ipairs(best.obj:GetDescendants()) do
+						if x:IsA("ProximityPrompt") and x.Enabled then
+							if fireproximityprompt then fireproximityprompt(x, 0) end
+						elseif x:IsA("ClickDetector") then
+							if fireclickdetector then fireclickdetector(x) end
+						end
+					end
+				end
+			end)
 		end
 	end
 end)
@@ -475,6 +514,11 @@ T1:Toggle({Title = "玩家透视（蓝色）", Value = false, Callback = functio
 			if t.kind == "player" then killTag(t) tags[part] = nil end
 		end
 	end
+end})
+
+T1:Toggle({Title = "自动吃水晶（自动飞过去拾取）", Value = false, Callback = function(v)
+	cfg.crystalOn = v
+	WindUI:Notify({Title = "自动吃水晶", Content = v and "已开启，会自动飞向最近的碎片" or "已关闭", Duration = 4})
 end})
 
 T1:Section({Title = "说明"})
