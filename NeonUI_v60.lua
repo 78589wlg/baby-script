@@ -825,14 +825,20 @@ end})
 T5=Win:Tab({Title="脚本库",Icon="list",Locked=true})
 T5:Section({Title="其他脚本"})
 local sel="造船寻宝"
-local LU={["造船寻宝"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Boat_v37.lua",["重型钓鱼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Fish_v2.lua",["在末日中生存下来"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Deadly.lua",["偷一个蛋"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Egg.lua",["森林中的99夜"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/N99.lua",["试炼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Examination_zh.lua",["战利品"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Loot_v2.lua",["被追捕（HUNTED）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Pursued.lua",["Blade Ball（剑球）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/BladeBall.lua?v=17"}
-T5:Dropdown({Title="选择脚本",Values={"造船寻宝","重型钓鱼","在末日中生存下来","偷一个蛋","森林中的99夜","试炼","战利品","被追捕（HUNTED）","Blade Ball（剑球）"},Value="造船寻宝",Callback=function(v)
+local LU={["造船寻宝"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Boat_v37.lua",["重型钓鱼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Fish_v2.lua",["在末日中生存下来"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Deadly.lua",["偷一个蛋"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Egg.lua",["森林中的99夜"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/N99.lua",["试炼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Examination_zh.lua",["战利品"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Loot_v2.lua",["被追捕（HUNTED）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Pursued.lua",["Blade Ball（剑球）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/BladeBall.lua?v=17",["剑球第三方·VEX"]="https://cdn.jsdelivr.net/gh/yoursvexyyy/VEX-OP@main/bladeball",["剑球第三方·Xera"]="https://cdn.jsdelivr.net/gh/luascriptsROBLOX/BladeBallXera@main/XeraUltron",["剑球第三方·Bxnks"]="https://cdn.jsdelivr.net/gh/SubToNeon/bxnks-hub-by-neon@main/BETA.lua"}
+T5:Dropdown({Title="选择脚本",Values={"造船寻宝","重型钓鱼","在末日中生存下来","偷一个蛋","森林中的99夜","试炼","战利品","被追捕（HUNTED）","Blade Ball（剑球）","剑球第三方·VEX","剑球第三方·Xera","剑球第三方·Bxnks"},Value="造船寻宝",Callback=function(v)
 sel=v
 end})
 T5:Button({Title="使用",Callback=function()
 local u=LU[sel]
 if not u then WindUI:Notify({Title="脚本库",Content="未知脚本",Duration=2})return end
+local third=string.find(sel,"第三方",1,true)~=nil
+if third then
+WindUI:Notify({Title="第三方脚本",Content="不是我写的，内部混淆看不清，用私服小号测",Duration=4})
+WindUI:Notify({Title="脚本库",Content="正在下载 "..sel.."，文件大可能要等几秒",Duration=3})
+else
 WindUI:Notify({Title="脚本库",Content="正在执行 "..sel,Duration=2})
+end
 pcall(function()loadstring(game:HttpGet(u))()end)
 end})
 T5:Toggle({Title="进入游戏自动加载副脚本",Value=true,Callback=function(v)auto=v end})
