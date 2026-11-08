@@ -1,4 +1,4 @@
--- 婴儿脚本 · Blade Ball V12
+-- 婴儿脚本 · Blade Ball V13
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
@@ -8,6 +8,7 @@
 -- V10：加距离限制，球进入设定格数内才格挡（太远挡了服务端不认，球打不回去）
 -- V11：延迟严格受剩余飞行时间约束（最多用 60%），贴脸走紧急通道绕过节流，解决漏挡被球打死
 -- V12：去掉按球对象记录的锁（游戏复用球实例会导致第二回合永久失效），改为时间戳 + 重生重置
+-- V13：监听格挡成功，连续 N 次后主动冷却，避开服务端「连续 3 次即禁用」的阈值
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -26,6 +27,9 @@ local cfg = {
 	reactMax = 0.60,     -- 反应延迟上限（秒）
 	maxDist = 16,        -- 球进入这个距离内才允许格挡（太远挡了服务端不认）
 	pointDist = 9,       -- 贴脸距离：不管时间，直接挡
+	streakMax = 3,       -- 连续格挡成功 N 次后主动歇一下（避开服务端阈值）
+	coolMin = 3.5,       -- 冷却下限（秒）
+	coolMax = 5.5,       -- 冷却上限（秒）
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
@@ -211,9 +215,11 @@ local S = {
 
 local function resetState()
 	S.pBall, S.pAt = nil, 0
+	S.coolUntil = 0
 end
 local function checkBall(b, root)
 	if not b or not b.Parent then return end
+	if os.clock() < (S.coolUntil or 0) then return end
 	if b:GetAttribute("target") ~= LP.Name then return end
 
 	local v = b.AssemblyLinearVelocity
@@ -266,6 +272,29 @@ local function checkBall(b, root)
 	end
 end
 
+-- ================= 连击统计（用于避开服务端阈值） =================
+do
+	local rm = remotes()
+	local psAll = rm and (rm:FindFirstChild("ParrySuccessAll") or rm:FindFirstChild("ParrySuccess"))
+	if psAll and psAll.OnClientEvent then
+		psAll.OnClientEvent:Connect(function(...)
+			local args = table.pack(...)
+			for i = 1, args.n do
+				if args[i] == LP then
+					S.streak = S.streak + 1
+					S.lastWin = os.clock()
+					if S.streak >= (cfg.streakMax or 3) then
+						-- 到阈值前主动停手，等窗口滑过去
+						S.coolUntil = os.clock() + rnd(cfg.coolMin or 3.5, cfg.coolMax or 5.5)
+						S.streak = 0
+					end
+					break
+				end
+			end
+		end)
+	end
+end
+
 task.spawn(function()
 	while true do
 		RUN.Heartbeat:Wait()
@@ -303,7 +332,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V12" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V13" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -475,6 +504,19 @@ end})
 T1:Slider({ Title = "贴脸距离（5–20 格，无条件挡）", Value = { Min = 5, Max = 20, Default = 9 }, Callback = function(v)
 	cfg.pointDist = v
 end})
+
+T1:Section({ Title = "连击保护（避开服务端阈值）" })
+T1:Slider({ Title = "连续格挡上限（1–6 次，到就歇）", Value = { Min = 1, Max = 6, Default = 3 }, Callback = function(v)
+	cfg.streakMax = v
+end})
+T1:Slider({ Title = "歇多久下限（2–10 秒）", Value = { Min = 2, Max = 10, Default = 4 }, Callback = function(v)
+	cfg.coolMin = v
+	if cfg.coolMax < cfg.coolMin then cfg.coolMax = cfg.coolMin + 1 end
+end})
+T1:Slider({ Title = "歇多久上限（2–12 秒）", Value = { Min = 2, Max = 12, Default = 6 }, Callback = function(v)
+	cfg.coolMax = v
+	if cfg.coolMin > cfg.coolMax then cfg.coolMin = math.max(2, cfg.coolMax - 1) end
+end})
 T1:Slider({ Title = "最小点击间隔（80–400 毫秒，防踢）", Value = { Min = 80, Max = 400, Default = 120 }, Callback = function(v)
 	cfg.minGap = v / 1000
 end})
@@ -514,6 +556,8 @@ T1:Button({ Title = "诊断状态（自动复制）", Callback = function()
 		.. " | 球=" .. tostring(S.balls) .. " 锁定我=" .. tostring(S.mine)
 		.. " | 累计点击=" .. tostring(S.fires)
 		.. " | 上次点击=" .. (S.lastFire > 0 and (string.format("%.1f", since) .. "秒前") or "从未")
+		.. "\n【连击】连续成功=" .. tostring(S.streak)
+		.. " | 冷却剩余=" .. (os.clock() < (S.coolUntil or 0) and string.format("%.1f", S.coolUntil - os.clock()) .. "秒" or "无")
 		.. "\n【远程】ParryAttempt=" .. (ev and "存在" or "不存在")
 		.. " | 相机=" .. (cam and "有" or "无")
 		.. " | 球总数=" .. total .. " 锁定我=" .. mine
