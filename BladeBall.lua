@@ -1,10 +1,11 @@
--- 婴儿脚本 · Blade Ball V9
+-- 婴儿脚本 · Blade Ball V10
 -- 自动格挡 / 球透视 / 玩家透视 / 速度
 -- 适配：Blade Ball (PlaceId 13772394625, Wiggity.)
 -- V5 关键修复：此服格挡是本地判定，客户端不发 ParryAttempt，必须模拟触摸点击
 -- V6：该服有频率型反作弊，默认点击间隔放宽到 120ms，狂点模式 150ms
 -- V7：按行为特征防踢（随机抖动 + 故意失误率），100% 格挡成功率是最明显的机器特征
 -- V9：取消失误率，反应延迟 150~600ms 随机
+-- V10：加距离限制，球进入设定格数内才格挡（太远挡了服务端不认，球打不回去）
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -21,6 +22,8 @@ local cfg = {
 	missRate = 0,        -- 故意不格挡的概率（0 = 每颗都挡）
 	reactMin = 0.15,     -- 反应延迟下限（秒）：球锁定后不立刻点
 	reactMax = 0.60,     -- 反应延迟上限（秒）
+	maxDist = 16,        -- 球进入这个距离内才允许格挡（太远挡了服务端不认）
+	pointDist = 9,       -- 贴脸距离：不管时间，直接挡
 	arg1 = 0.50,         -- ParryAttempt 第一个参数
 	fullArgs = true,     -- true=发完整 4 参数，false=空参数
 	keyName = "F",
@@ -201,14 +204,20 @@ local function checkBall(b, root)
 	local thr = cfg.threshold
 	if cfg.humanOn then thr = thr * rnd(0.82, 1.22) end
 
-	if eta <= thr or dist < 12 then
+	-- 距离限制：球太远时格挡，服务端判定不成立，打不回去
+	local maxD = cfg.maxDist or 16
+	local pD = cfg.pointDist or 9
+	local near = dist <= maxD
+	local pointBlank = dist <= pD
+
+	if pointBlank or (near and eta <= thr) then
 		if pending[b] then return end
 		pending[b] = true
 
 		-- 人类反应时间：不会在球锁定的同一帧就按下，也不会每次都一样
 		local waitT = 0
 		if cfg.humanOn then
-			if dist < 12 then
+			if pointBlank then
 				-- 球已经贴脸，只能象征性延迟一下
 				waitT = rnd(0.03, 0.07)
 			else
@@ -255,7 +264,7 @@ end)
 
 -- ================= 界面 =================
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
-local Win = WindUI:CreateWindow({ Title = "Blade Ball V9" })
+local Win = WindUI:CreateWindow({ Title = "Blade Ball V10" })
 local T1 = Win:Tab({ Title = "格挡", Icon = "shield" })
 local T2 = Win:Tab({ Title = "视觉", Icon = "eye" })
 local T3 = Win:Tab({ Title = "移动", Icon = "zap" })
@@ -414,6 +423,13 @@ end})
 T1:Slider({ Title = "反应延迟上限（60–600 毫秒）", Value = { Min = 60, Max = 600, Default = 600 }, Callback = function(v)
 	cfg.reactMax = v / 1000
 	if cfg.reactMin > cfg.reactMax then cfg.reactMin = math.max(0.06, cfg.reactMax - 0.05) end
+end})
+T1:Slider({ Title = "格挡距离（8–40 格，越小越近才挡）", Value = { Min = 8, Max = 40, Default = 16 }, Callback = function(v)
+	cfg.maxDist = v
+	if cfg.pointDist > v then cfg.pointDist = math.max(5, v - 4) end
+end})
+T1:Slider({ Title = "贴脸距离（5–20 格，无条件挡）", Value = { Min = 5, Max = 20, Default = 9 }, Callback = function(v)
+	cfg.pointDist = v
 end})
 T1:Slider({ Title = "最小点击间隔（80–400 毫秒，防踢）", Value = { Min = 80, Max = 400, Default = 120 }, Callback = function(v)
 	cfg.minGap = v / 1000
