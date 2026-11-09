@@ -7,7 +7,7 @@ local P = game:GetService("Players")
 local LP = P.LocalPlayer
 local HS = game:GetService("HttpService")
 
-local cfg = { lang = getgenv().BabyTransLang or "zh", scene = getgenv().BabyTransScene == true }
+local cfg = { lang = getgenv().BabyTransLang or "zh", scene = getgenv().BabyTransScene == true, other = getgenv().BabyTransOther ~= false }
 
 local cache = {}                                  -- "lang|原文" -> 译文
 local rec = setmetatable({}, { __mode = "k" })     -- 控件 -> {src=,out=}
@@ -212,6 +212,39 @@ local function watch(inst)
 	conns[#conns + 1] = c
 end
 
+-- 自己面板的根节点（由主脚本传入 WindUI 窗口），永远不翻
+local selfRoot
+do
+	local w = getgenv().BabyTransSelfGui
+	if w then
+		local o, guard = w, 0
+		while o and o.Parent and o.Parent ~= game and guard < 10 do o = o.Parent; guard = guard + 1 end
+		if o and o ~= game then selfRoot = o end
+	end
+end
+
+local OWN = { "婴儿脚本", "BabyTrans", "BabyOnline", "BabyTag" }
+local OTHER = { "WindUI", "Rayfield", "Orion", "Kavo", "Fluent", "Linoria", "Owl" }
+
+local function inSkip(inst)
+	if selfRoot and inst:IsDescendantOf(selfRoot) then return true end
+	local o = inst
+	for _ = 1, 8 do
+		o = o.Parent
+		if not o or o == game then break end
+		local nm = tostring(o.Name)
+		for _, k in ipairs(OWN) do
+			if nm:find(k, 1, true) then return true end
+		end
+		if not cfg.other then
+			for _, k in ipairs(OTHER) do
+				if nm:find(k, 1, true) then return true end
+			end
+		end
+	end
+	return false
+end
+
 local function consider(inst)
 	if not inst or not inst.Parent then return end
 	if inSkip(inst) then return end
@@ -221,20 +254,6 @@ local function consider(inst)
 	local r = rec[inst]
 	if r and r.out and inst.Text == r.out then return end
 	enqueue(inst, inst.Text)
-end
-
-local SKIP = { "WindUI", "婴儿脚本", "BabyTrans", "BabyOnline", "BabyTag", "Rayfield" }
-local function inSkip(inst)
-	local o = inst
-	for _ = 1, 8 do
-		o = o.Parent
-		if not o or o == game then break end
-		local nm = tostring(o.Name)
-		for _, k in ipairs(SKIP) do
-			if nm:find(k, 1, true) then return true end
-		end
-	end
-	return false
 end
 
 local function isTextClass(o)
@@ -332,7 +351,26 @@ end
 
 getgenv().BabyTransSetScene = function(v)
 	cfg.scene = v and true or false
-	if cfg.scene then scan(workspace) end
+	if cfg.scene then
+		scan(workspace)
+		watchTree(workspace)
+	end
+end
+
+local function coreGui()
+	local ok, c = pcall(function() return game:GetService("CoreGui") end)
+	if ok then return c end
+end
+
+-- 翻译其他脚本（第三方面板）：WindUI/Rayfield/Orion 等，以及 CoreGui 里的执行器 UI
+getgenv().BabyTransSetOther = function(v)
+	cfg.other = v and true or false
+	if cfg.other then
+		local c = coreGui()
+		if c then scan(c); watchTree(c) end
+		local p = LP:FindFirstChildOfClass("PlayerGui")
+		if p then scan(p) end
+	end
 end
 
 getgenv().BabyTransOff = function()
@@ -349,6 +387,7 @@ getgenv().BabyTransOff = function()
 	getgenv().BabyTransOff = nil
 	getgenv().BabyTransSetLang = nil
 	getgenv().BabyTransSetScene = nil
+	getgenv().BabyTransSetOther = nil
 end
 
 buildHud()
@@ -360,6 +399,10 @@ end
 if cfg.scene then
 	scan(workspace)
 	watchTree(workspace)
+end
+if cfg.other then
+	local c = coreGui()
+	if c then scan(c); watchTree(c) end
 end
 
 -- 新界面延迟出现，隔几秒补扫一次
