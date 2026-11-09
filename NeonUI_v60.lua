@@ -430,7 +430,7 @@ getgenv().BabyTransLang=trLang
 getgenv().BabyTransScene=trScene
 getgenv().BabyTransOther=trOther
 getgenv().BabyTransSelfGui=SelfGui
-pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=2"))()end)
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=3"))()end)
 else
 if getgenv().BabyTransOff then pcall(getgenv().BabyTransOff) end
 end
