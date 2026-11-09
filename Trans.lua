@@ -85,29 +85,57 @@ local function engineTencent(texts)
 end
 
 -- ---------- Google ----------
-local function googleOne(chunk)
+local googleOne
+
+local function gsplit(chunk)
+	local mid = math.floor(#chunk / 2)
+	local a, b = {}, {}
+	for i = 1, mid do a[#a + 1] = chunk[i] end
+	for i = mid + 1, #chunk do b[#b + 1] = chunk[i] end
+	local pa, pb = googleOne(a), googleOne(b)
+	if not pa or not pb then return nil end
+	local out = {}
+	for _, v in ipairs(pa) do out[#out + 1] = v end
+	for _, v in ipairs(pb) do out[#out + 1] = v end
+	return out
+end
+
+googleOne = function(chunk)
+	if #chunk == 0 then return {} end
 	local q = table.concat(chunk, "\n")
-	if #q > 1500 then return nil end
+	if #q > 1600 then
+		if #chunk == 1 then return nil end
+		return gsplit(chunk)
+	end
 	local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl="
 		.. L("google") .. "&dt=t&q=" .. urlenc(q)
 	local js = decode(httpReq("GET", url))
-	if not js or type(js[1]) ~= "table" then return nil end
+	if not js or type(js[1]) ~= "table" then
+		if #chunk == 1 then return nil end
+		return gsplit(chunk)
+	end
 	local buf = {}
 	for _, seg in ipairs(js[1]) do
 		if type(seg) == "table" and type(seg[1]) == "string" then buf[#buf + 1] = seg[1] end
 	end
 	local whole = table.concat(buf)
+	if whole == "" then
+		if #chunk == 1 then return nil end
+		return gsplit(chunk)
+	end
 	local parts = {}
 	for line in (whole .. "\n"):gmatch("(.-)\n") do parts[#parts + 1] = line end
-	if #parts ~= #chunk then return nil end
-	return parts
+	if #parts == #chunk then return parts end
+	if #chunk == 1 then return { whole } end
+	-- 行数对不上（原文里带换行等），拆半重试，比整体走别的引擎快
+	return gsplit(chunk)
 end
 
 local function engineGoogle(texts)
 	local out, i = {}, 1
 	while i <= #texts do
 		local chunk, chars = {}, 0
-		while i <= #texts and chars < 900 do
+		while i <= #texts and chars < 900 and #chunk < 30 do
 			chunk[#chunk + 1] = texts[i]
 			chars = chars + #texts[i] + 1
 			i = i + 1
@@ -162,7 +190,7 @@ local function engineMyMemory(texts)
 end
 
 local ENG = {
-	google   = { name = "Google", fn = engineGoogle, max = 20 },
+	google   = { name = "Google", fn = engineGoogle, max = 25 },
 	bing     = { name = "必应", fn = engineBing, max = 25 },
 	tencent  = { name = "腾讯", fn = engineTencent, max = 40 },
 	mymemory = { name = "MyMemory", fn = engineMyMemory, max = 4 },
@@ -432,8 +460,8 @@ local function watchTree(root)
 end
 
 -- ================= 工作线程 =================
-local BATCH = 40      -- 每批条数（腾讯实测 40 条约 2 秒，翻 40 条和翻 1 条差不多的等待时间）
-local WORKERS = 3     -- 同时发几个请求
+local BATCH = 25      -- 每批条数（Google 一次 20-25 条约 1 秒）
+local WORKERS = 4     -- 同时发几个请求
 
 local function hudUpdate()
 	if hudText and hudText.Parent then
