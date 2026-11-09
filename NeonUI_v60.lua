@@ -417,20 +417,27 @@ end
 end})
 -- ===== 翻译 =====
 T4:Section({Title="翻译"})
-local trLang,trScene,trOther="zh",false,true
+local trLang,trScene,trOther,trEngine="zh",false,true,"auto"
 T4:Dropdown({Title="翻译成",Values={"简体中文","English","日本語","한국어","繁體中文"},Value="简体中文",Callback=function(v)
 local m={["简体中文"]="zh",["English"]="en",["日本語"]="ja",["한국어"]="ko",["繁體中文"]="zh-TW"}
 trLang=m[v] or "zh"
 getgenv().BabyTransLang=trLang
 if getgenv().BabyTransSetLang then pcall(getgenv().BabyTransSetLang,trLang) end
 end})
+T4:Dropdown({Title="翻译引擎",Values={"自动（谁快用谁）","Google","必应","腾讯","MyMemory"},Value="自动（谁快用谁）",Callback=function(v)
+local m={["自动（谁快用谁）"]="auto",["Google"]="google",["必应"]="bing",["腾讯"]="tencent",["MyMemory"]="mymemory"}
+trEngine=m[v] or "auto"
+getgenv().BabyTransEngine=trEngine
+if getgenv().BabyTransSetEngine then pcall(getgenv().BabyTransSetEngine,trEngine) end
+end})
 T4:Toggle({Title="翻译游戏文字（界面）",Value=false,Callback=function(v)
 if v then
 getgenv().BabyTransLang=trLang
 getgenv().BabyTransScene=trScene
 getgenv().BabyTransOther=trOther
+getgenv().BabyTransEngine=trEngine
 getgenv().BabyTransSelfGui=SelfGui
-pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=3"))()end)
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=4"))()end)
 else
 if getgenv().BabyTransOff then pcall(getgenv().BabyTransOff) end
 end
