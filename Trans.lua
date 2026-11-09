@@ -1,13 +1,13 @@
 -- 婴儿脚本 · 游戏文字翻译（界面 + 场景）
 -- 用法：主脚本「更多 → 翻译」开关；也可单独执行本文件
--- 引擎：腾讯 transmart（批量）→ Google gtx（逐条，备用）
+-- 引擎：Google / 必应 / 腾讯 / MyMemory，可自选，失败自动换下一个
 if getgenv().BabyTransOff then pcall(getgenv().BabyTransOff) end
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
 local HS = game:GetService("HttpService")
 
-local cfg = { lang = getgenv().BabyTransLang or "zh", scene = getgenv().BabyTransScene == true, other = getgenv().BabyTransOther ~= false }
+local cfg = { lang = getgenv().BabyTransLang or "zh", scene = getgenv().BabyTransScene == true, other = getgenv().BabyTransOther ~= false, engine = getgenv().BabyTransEngine or "auto" }
 
 local cache = {}                                  -- "lang|原文" -> 译文
 local rec = setmetatable({}, { __mode = "k" })     -- 控件 -> {src=,out=}
@@ -16,26 +16,31 @@ local queued = setmetatable({}, { __mode = "k" })  -- 控件 -> 已排队的原�
 local conns = {}
 local alive = true
 local okCount = 0
-local engineName = "腾讯"
+local engineName = "自动"
 local lastErr = ""
 
 -- ================= 网络 =================
-local function post(url, body)
+local function httpReq(method, url, body, headers)
+	local h = {}
+	if headers then for k, v in pairs(headers) do h[k] = v end end
+	if body and not h["Content-Type"] then h["Content-Type"] = "application/json" end
 	local res
-	local function pick(r) if r and r.Body then res = r.Body end end
+	local function grab(r) if r and r.Body then res = r.Body end end
 	if request then
-		local ok, r = pcall(request, { Url = url, Method = "POST", Body = body, Headers = { ["Content-Type"] = "application/json" } })
-		if ok then pick(r) end
+		pcall(function() grab(request({ Url = url, Method = method, Body = body, Headers = h })) end)
 	elseif http_request then
-		local ok, r = pcall(http_request, { Url = url, Method = "POST", Body = body, Headers = { ["Content-Type"] = "application/json" } })
-		if ok then pick(r) end
+		pcall(function() grab(http_request({ Url = url, Method = method, Body = body, Headers = h })) end)
 	elseif syn and syn.request then
-		local ok, r = pcall(syn.request, { Url = url, Method = "POST", Body = body, Headers = { ["Content-Type"] = "application/json" } })
-		if ok then pick(r) end
+		pcall(function() grab(syn.request({ Url = url, Method = method, Body = body, Headers = h })) end)
 	end
 	if not res then
-		local ok, r = pcall(function() return game:HttpPost(url, body, "application/json") end)
-		if ok and type(r) == "string" then res = r end
+		if method == "GET" then
+			local ok, r = pcall(function() return game:HttpGet(url) end)
+			if ok and type(r) == "string" then res = r end
+		else
+			local ok, r = pcall(function() return game:HttpPost(url, body, "application/json") end)
+			if ok and type(r) == "string" then res = r end
+		end
 	end
 	return res
 end
@@ -51,69 +56,188 @@ local function decode(raw)
 	return nil
 end
 
--- 腾讯：一次可翻多条，返回数组
+-- 各引擎的语言代码不一样，这里统一映射
+local LNG = {
+	google   = { zh = "zh-CN", ["zh-TW"] = "zh-TW", en = "en", ja = "ja", ko = "ko" },
+	bing     = { zh = "zh-Hans", ["zh-TW"] = "zh-Hant", en = "en", ja = "ja", ko = "ko" },
+	tencent  = { zh = "zh", ["zh-TW"] = "zh-TW", en = "en", ja = "ja", ko = "ko" },
+	mymemory = { zh = "zh-CN", ["zh-TW"] = "zh-TW", en = "en", ja = "ja", ko = "ko" },
+}
+
+local function L(eng) return LNG[eng][cfg.lang] or LNG[eng].zh end
+
+-- ---------- 腾讯 ----------
 local function engineTencent(texts)
 	local body = HS:JSONEncode({
 		header = { fn = "auto_translation", client_key = "browser-chrome-110.0.0-Mac OS", user_type = "web", device_type = "web" },
 		type = "plain",
 		model_category = "normal",
 		source = { lang = "auto", text_list = texts },
-		target = { lang = cfg.lang },
+		target = { lang = L("tencent") },
 	})
-	local js = decode(post("https://transmart.qq.com/api/imt", body))
-	if not js then return nil end
-	local code = js.header and js.header.ret_code
-	if code ~= "succ" and code ~= "0" then
-		lastErr = "腾讯:" .. tostring(code or "?")
-		return nil
-	end
+	local js = decode(httpReq("POST", "https://transmart.qq.com/api/imt", body))
+	if not js or not js.header then return nil end
+	local code = js.header.ret_code
+	if code ~= "succ" and code ~= "0" then return nil end
 	local arr = js.auto_translation
 	if type(arr) ~= "table" or #arr ~= #texts then return nil end
 	return arr
 end
 
--- Google：逐条，仅作备用
+-- ---------- Google ----------
+local function googleOne(chunk)
+	local q = table.concat(chunk, "\n")
+	if #q > 1500 then return nil end
+	local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl="
+		.. L("google") .. "&dt=t&q=" .. urlenc(q)
+	local js = decode(httpReq("GET", url))
+	if not js or type(js[1]) ~= "table" then return nil end
+	local buf = {}
+	for _, seg in ipairs(js[1]) do
+		if type(seg) == "table" and type(seg[1]) == "string" then buf[#buf + 1] = seg[1] end
+	end
+	local whole = table.concat(buf)
+	local parts = {}
+	for line in (whole .. "\n"):gmatch("(.-)\n") do parts[#parts + 1] = line end
+	if #parts ~= #chunk then return nil end
+	return parts
+end
+
 local function engineGoogle(texts)
-	local out = {}
-	for i, t in ipairs(texts) do
-		local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl="
-			.. cfg.lang .. "&dt=t&q=" .. urlenc(t)
-		local ok, raw = pcall(function() return game:HttpGet(url) end)
-		if not ok then lastErr = "Google:取不到" return nil end
-		local js = decode(raw)
-		if not js or type(js[1]) ~= "table" then return nil end
-		local s = ""
-		for _, seg in ipairs(js[1]) do
-			if type(seg) == "table" and type(seg[1]) == "string" then s = s .. seg[1] end
+	local out, i = {}, 1
+	while i <= #texts do
+		local chunk, chars = {}, 0
+		while i <= #texts and chars < 900 do
+			chunk[#chunk + 1] = texts[i]
+			chars = chars + #texts[i] + 1
+			i = i + 1
 		end
-		if s == "" then return nil end
-		out[i] = s
-		task.wait(0.1)
+		local part = googleOne(chunk)
+		if not part then return nil end
+		for k = 1, #part do out[#out + 1] = part[k] end
 	end
 	return out
 end
 
-local ENGINES = {
-	{ name = "腾讯", fn = engineTencent },
-	{ name = "Google", fn = engineGoogle },
+-- ---------- 必应（微软 Azure 免费令牌，支持数组批量） ----------
+local bingTok, bingTokAt = nil, 0
+local function bingToken()
+	if bingTok and os.clock() - bingTokAt < 480 then return bingTok end
+	local raw = httpReq("GET", "https://edge.microsoft.com/translate/auth")
+	if not raw or #raw < 40 then return nil end
+	bingTok, bingTokAt = raw, os.clock()
+	return bingTok
+end
+
+local function engineBing(texts)
+	local tok = bingToken()
+	if not tok then return nil end
+	local arr = {}
+	for i, t in ipairs(texts) do arr[i] = { Text = t } end
+	local url = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&to=" .. L("bing")
+	local js = decode(httpReq("POST", url, HS:JSONEncode(arr), { ["Authorization"] = "Bearer " .. tok }))
+	if type(js) ~= "table" then return nil end
+	local out = {}
+	for i, item in ipairs(js) do
+		local tr = item.translations and item.translations[1]
+		if not tr or type(tr.text) ~= "string" then return nil end
+		out[i] = tr.text
+	end
+	if #out ~= #texts then return nil end
+	return out
+end
+
+-- ---------- MyMemory（免密钥，单条限额） ----------
+local function engineMyMemory(texts)
+	if #texts > 4 then return nil end
+	local out = {}
+	for i, t in ipairs(texts) do
+		local url = "https://api.mymemory.translated.net/get?q=" .. urlenc(t) .. "&langpair=auto|" .. L("mymemory")
+		local js = decode(httpReq("GET", url))
+		local tx = js and js.responseData and js.responseData.translatedText
+		if type(tx) ~= "string" or tx == "" then return nil end
+		out[i] = tx
+	end
+	return out
+end
+
+local ENG = {
+	google   = { name = "Google", fn = engineGoogle, max = 20 },
+	bing     = { name = "必应", fn = engineBing, max = 25 },
+	tencent  = { name = "腾讯", fn = engineTencent, max = 40 },
+	mymemory = { name = "MyMemory", fn = engineMyMemory, max = 4 },
 }
+local AUTO_ORDER = { "google", "bing", "tencent", "mymemory" }
+local badUntil, failN = {}, {}
+local topEngine, probeDone = nil, false
+
+local function runEngine(e, texts)
+	local out, i = {}, 1
+	while i <= #texts do
+		local chunk = {}
+		while i <= #texts and #chunk < e.max do
+			chunk[#chunk + 1] = texts[i]
+			i = i + 1
+		end
+		local ok, part = pcall(e.fn, chunk)
+		if not ok or type(part) ~= "table" then return nil end
+		for k = 1, #chunk do out[#out + 1] = part[k] or "" end
+	end
+	return out
+end
+
+local function orderEngines()
+	local o, seen = {}, {}
+	local function push(k)
+		if ENG[k] and not seen[k] then seen[k] = true; o[#o + 1] = k end
+	end
+	if cfg.engine ~= "auto" then push(cfg.engine) end
+	if cfg.engine == "auto" and topEngine then push(topEngine) end
+	for _, k in ipairs(AUTO_ORDER) do push(k) end
+	local live = {}
+	for _, k in ipairs(o) do
+		if not badUntil[k] or os.clock() > badUntil[k] then live[#live + 1] = k end
+	end
+	if #live == 0 then return o end
+	return live
+end
 
 local function translate(texts)
-	local first = 1
-	for i, e in ipairs(ENGINES) do
-		if e.name == engineName then first = i break end
+	while cfg.engine == "auto" and not probeDone and alive do
+		task.wait(0.1)
 	end
-	for k = 0, #ENGINES - 1 do
-		local e = ENGINES[(first - 1 + k) % #ENGINES + 1]
-		if e.name == "Google" and #texts > 8 then break end   -- 逐条引擎，批量时反而更慢
-		local ok, out = pcall(e.fn, texts)
-		if ok and out then
+	for _, k in ipairs(orderEngines()) do
+		local e = ENG[k]
+		local out = runEngine(e, texts)
+		if out then
+			failN[k] = 0
 			engineName = e.name
+			lastErr = ""
 			return out
 		end
+		failN[k] = (failN[k] or 0) + 1
+		if failN[k] >= 2 then badUntil[k] = os.clock() + 120 end
+		lastErr = e.name .. "不通"
 	end
 	return nil
 end
+
+-- 自动模式：同时试四个，谁先回来用谁
+local function startProbe()
+	if cfg.engine ~= "auto" then probeDone = true; return end
+	local best
+	for _, k in ipairs(AUTO_ORDER) do
+		task.spawn(function()
+			local ok, out = pcall(ENG[k].fn, { "hello" })
+			if ok and out and out[1] and out[1] ~= "" and not best then best = k end
+		end)
+	end
+	local t0 = os.clock()
+	while not best and os.clock() - t0 < 6 and alive do task.wait(0.1) end
+	topEngine = best or "tencent"
+	probeDone = true
+end
+task.spawn(startProbe)
 
 -- ================= 文本筛选 =================
 local function trim(s)
@@ -315,7 +439,9 @@ local function hudUpdate()
 	if hudText and hudText.Parent then
 		local qn = #queue - qh + 1
 		if qn < 0 then qn = 0 end
-		hudText.Text = "翻译 " .. okCount .. " 条 · 队列 " .. qn .. " · " .. engineName
+		local tail = engineName
+		if qn > 20 and lastErr ~= "" then tail = lastErr end
+		hudText.Text = "翻译 " .. okCount .. " 条 · 队列 " .. qn .. " · " .. tail
 	end
 end
 
@@ -392,6 +518,17 @@ getgenv().BabyTransSetLang = function(code)
 	end
 end
 
+getgenv().BabyTransSetEngine = function(k)
+	cfg.engine = k or "auto"
+	badUntil, failN = {}, {}
+	if cfg.engine == "auto" then
+		probeDone = false
+		task.spawn(startProbe)
+	else
+		probeDone = true
+	end
+end
+
 getgenv().BabyTransSetScene = function(v)
 	cfg.scene = v and true or false
 	if cfg.scene then
@@ -431,6 +568,7 @@ getgenv().BabyTransOff = function()
 	getgenv().BabyTransSetLang = nil
 	getgenv().BabyTransSetScene = nil
 	getgenv().BabyTransSetOther = nil
+	getgenv().BabyTransSetEngine = nil
 end
 
 buildHud()
