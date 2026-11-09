@@ -2,7 +2,23 @@ local WindUI=loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/Win
 local P=game:GetService("Players")
 local LP=P.LocalPlayer
 local sp,jp=16,50
+local function guiRoots()
+local t={}
+local pg=LP:FindFirstChildOfClass("PlayerGui")
+if pg then t[#t+1]=pg end
+local okc,cg=pcall(function() return game:GetService("CoreGui") end)
+if okc and cg then t[#t+1]=cg end
+return t
+end
+local GUIO={}
+for _,r in ipairs(guiRoots()) do for _,c in ipairs(r:GetChildren()) do GUIO[c]=true end end
 local Win=WindUI:CreateWindow({Title="婴儿脚本"})
+local SelfGui
+for _,r in ipairs(guiRoots()) do
+for _,c in ipairs(r:GetChildren()) do
+if not GUIO[c] and c:IsA("ScreenGui") then SelfGui=c end
+end
+end
 local ok=false
 local T2,T3,T4,T5
 local ntHeartStart
@@ -401,7 +417,7 @@ end
 end})
 -- ===== 翻译 =====
 T4:Section({Title="翻译"})
-local trLang,trScene="zh",false
+local trLang,trScene,trOther="zh",false,true
 T4:Dropdown({Title="翻译成",Values={"简体中文","English","日本語","한국어","繁體中文"},Value="简体中文",Callback=function(v)
 local m={["简体中文"]="zh",["English"]="en",["日本語"]="ja",["한국어"]="ko",["繁體中文"]="zh-TW"}
 trLang=m[v] or "zh"
@@ -412,7 +428,9 @@ T4:Toggle({Title="翻译游戏文字（界面）",Value=false,Callback=function(
 if v then
 getgenv().BabyTransLang=trLang
 getgenv().BabyTransScene=trScene
-pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=1"))()end)
+getgenv().BabyTransOther=trOther
+getgenv().BabyTransSelfGui=SelfGui
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=2"))()end)
 else
 if getgenv().BabyTransOff then pcall(getgenv().BabyTransOff) end
 end
@@ -421,6 +439,11 @@ T4:Toggle({Title="包含场景文字（告示牌/头顶字）",Value=false,Callb
 trScene=v
 getgenv().BabyTransScene=v
 if getgenv().BabyTransSetScene then pcall(getgenv().BabyTransSetScene,v) end
+end})
+T4:Toggle({Title="翻译其他脚本（第三方面板）",Value=true,Callback=function(v)
+trOther=v
+getgenv().BabyTransOther=v
+if getgenv().BabyTransSetOther then pcall(getgenv().BabyTransSetOther,v) end
 end})
 -- ===== 在线脚本用户（公共在线表，免部署） =====
 local NT="https://ntfy.sh/"
