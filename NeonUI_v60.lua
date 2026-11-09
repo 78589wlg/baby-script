@@ -399,6 +399,29 @@ end
 end
 end
 end})
+-- ===== 翻译 =====
+T4:Section({Title="翻译"})
+local trLang,trScene="zh",false
+T4:Dropdown({Title="翻译成",Values={"简体中文","English","日本語","한국어","繁體中文"},Value="简体中文",Callback=function(v)
+local m={["简体中文"]="zh",["English"]="en",["日本語"]="ja",["한국어"]="ko",["繁體中文"]="zh-TW"}
+trLang=m[v] or "zh"
+getgenv().BabyTransLang=trLang
+if getgenv().BabyTransSetLang then pcall(getgenv().BabyTransSetLang,trLang) end
+end})
+T4:Toggle({Title="翻译游戏文字（界面）",Value=false,Callback=function(v)
+if v then
+getgenv().BabyTransLang=trLang
+getgenv().BabyTransScene=trScene
+pcall(function()loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/Trans.lua?v=1"))()end)
+else
+if getgenv().BabyTransOff then pcall(getgenv().BabyTransOff) end
+end
+end})
+T4:Toggle({Title="包含场景文字（告示牌/头顶字）",Value=false,Callback=function(v)
+trScene=v
+getgenv().BabyTransScene=v
+if getgenv().BabyTransSetScene then pcall(getgenv().BabyTransSetScene,v) end
+end})
 -- ===== 在线脚本用户（公共在线表，免部署） =====
 local NT="https://ntfy.sh/"
 local ntOn=false
