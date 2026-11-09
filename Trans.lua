@@ -105,6 +105,7 @@ local function translate(texts)
 	end
 	for k = 0, #ENGINES - 1 do
 		local e = ENGINES[(first - 1 + k) % #ENGINES + 1]
+		if e.name == "Google" and #texts > 8 then break end   -- 逐条引擎，批量时反而更慢
 		local ok, out = pcall(e.fn, texts)
 		if ok and out then
 			engineName = e.name
@@ -198,8 +199,11 @@ local function enqueue(inst, text)
 	queue[#queue + 1] = { inst = inst, text = t }
 end
 
+local watched = setmetatable({}, { __mode = "k" })
+
 local function watch(inst)
 	if inst:GetAttribute("BabyTrW") then return end
+	watched[inst] = true
 	pcall(function() inst:SetAttribute("BabyTrW", true) end)
 	local c = inst:GetPropertyChangedSignal("Text"):Connect(function()
 		if not alive then return end
@@ -245,15 +249,42 @@ local function inSkip(inst)
 	return false
 end
 
+local function visibleNow(inst)
+	if inst.Visible == false then return false end
+	local o, guard = inst.Parent, 0
+	while o and o ~= game and guard < 12 do
+		guard = guard + 1
+		if o:IsA("GuiObject") then
+			if o.Visible == false then return false end
+		elseif o:IsA("LayerCollector") then
+			return o.Enabled ~= false
+		end
+		o = o.Parent
+	end
+	return true
+end
+
 local function consider(inst)
 	if not inst or not inst.Parent then return end
 	if inSkip(inst) then return end
 	if hud and inst:IsDescendantOf(hud) then return end
-	if inst:GetAttribute("BabyTrW") then return end
-	watch(inst)
+	if not visibleNow(inst) then return end          -- 关着/隐藏的界面先不翻，打开后由补扫接手
+	if not inst:GetAttribute("BabyTrW") then watch(inst) end
 	local r = rec[inst]
 	if r and r.out and inst.Text == r.out then return end
 	enqueue(inst, inst.Text)
+end
+
+-- 已登记的控件每 1 秒复查一次：从隐藏变可见、或文字被游戏改回原文，就立刻补翻
+local function recheck()
+	for inst in pairs(watched) do
+		if inst.Parent and visibleNow(inst) then
+			local r = rec[inst]
+			if not (r and r.out and inst.Text == r.out) then
+				enqueue(inst, inst.Text)
+			end
+		end
+	end
 end
 
 local function isTextClass(o)
@@ -277,15 +308,26 @@ local function watchTree(root)
 end
 
 -- ================= 工作线程 =================
-task.spawn(function()
+local BATCH = 40      -- 每批条数（腾讯实测 40 条约 2 秒，翻 40 条和翻 1 条差不多的等待时间）
+local WORKERS = 3     -- 同时发几个请求
+
+local function hudUpdate()
+	if hudText and hudText.Parent then
+		local qn = #queue - qh + 1
+		if qn < 0 then qn = 0 end
+		hudText.Text = "翻译 " .. okCount .. " 条 · 队列 " .. qn .. " · " .. engineName
+	end
+end
+
+local function worker()
 	local idle = 0
 	while alive do
-		local items, texts, seen, keys = {}, {}, {}, {}
-		local guard = 0
-		while #texts < 12 and qh <= #queue do
+		local items, texts, seen = {}, {}, {}
+		local want = math.min(BATCH, #queue - qh + 1)
+		local taken = 0
+		while taken < want and qh <= #queue and #texts < BATCH do
 			local it = queue[qh]; qh = qh + 1
-			guard = guard + 1
-			if guard > 400 then break end
+			taken = taken + 1
 			local inst = it.inst
 			local r = rec[inst]
 			local stillSame = inst.Parent and (inst.Text == it.text or (r and r.out == inst.Text))
@@ -300,41 +342,42 @@ task.spawn(function()
 					items[#items + 1] = it
 				end
 			end
-			if qh > 200 then
-				local fresh = {}
-				for i = qh, #queue do fresh[#fresh + 1] = queue[i] end
-				queue, qh = fresh, 1
-			end
+		end
+		if qh > 600 then
+			local fresh = {}
+			for i = qh, #queue do fresh[#fresh + 1] = queue[i] end
+			queue, qh = fresh, 1
 		end
 
 		if #texts == 0 then
 			idle = idle + 1
-			task.wait(idle > 3 and 0.5 or 0.25)
+			task.wait(idle > 3 and 0.4 or 0.15)
 		else
 			idle = 0
 			local out = translate(texts)
 			if out then
 				for k, it in ipairs(items) do
-					local s = out[k]
-					if type(s) == "string" and s ~= "" then
-						cache[cfg.lang .. "|" .. it.text] = s
-						applyText(it.inst, it.text, s)
+					local t = out[k]
+					if type(t) == "string" and t ~= "" then
+						cache[cfg.lang .. "|" .. it.text] = t
+						applyText(it.inst, it.text, t)
 						okCount = okCount + 1
+					else
+						queued[it.inst] = nil
 					end
 				end
 			else
-				task.wait(1.2)
+				for _, it in ipairs(items) do queued[it.inst] = nil end
+				task.wait(0.6)
 			end
-			task.wait(0.15)
 		end
-
-		if hudText and hudText.Parent then
-			local qn = #queue - qh + 1
-			if qn < 0 then qn = 0 end
-			hudText.Text = "翻译 " .. okCount .. " 条 · 队列 " .. qn .. " · " .. engineName
-		end
+		hudUpdate()
 	end
-end)
+end
+
+for _ = 1, WORKERS do
+	task.spawn(worker)
+end
 
 -- ================= 启停 =================
 getgenv().BabyTransSetLang = function(code)
@@ -407,11 +450,16 @@ end
 
 -- 新界面延迟出现，隔几秒补扫一次
 task.spawn(function()
+	local tick = 0
 	while alive do
-		task.wait(cfg.scene and 5 or 3)
+		task.wait(1)
 		if not alive then break end
-		local p = LP:FindFirstChildOfClass("PlayerGui")
-		if p then scan(p) end
-		if cfg.scene then scan(workspace) end
+		tick = tick + 1
+		pcall(recheck)
+		if tick % 5 == 0 then
+			local p = LP:FindFirstChildOfClass("PlayerGui")
+			if p then scan(p) end
+			if cfg.scene then scan(workspace) end
+		end
 	end
 end)
