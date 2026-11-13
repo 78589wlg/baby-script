@@ -1,7 +1,7 @@
--- 婴儿脚本 · 被追捕（HUNTED）V3
+-- 婴儿脚本 · 被追捕（HUNTED）V4
 -- 门透视 / 碎片透视 / 穿墙 / 速度 / 全亮 / 自动开门 / 传送
 -- 适配：HUNTED [HALLOWEEN EVENT] (PlaceId 136431686349723)
--- V3 自动吃水晶：修正计时（改用 Heartbeat 真实秒数），不再卡死不动
+-- V4 自动吃水晶：复用手动传送的成功路径，吃不到自动换目标
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -365,151 +365,135 @@ task.spawn(function()
 	end
 end)
 
--- ================= 自动吃水晶（V3） =================
--- V2 的坑：依赖 refresh 生成的 lootCache，还叠了多层门控，任何一环不满足就完全不动作，
---          而且界面上看不到为什么不动作。
--- V3：循环里自己扫描、门控只剩「跳过表」，运行状态全部暴露到界面。
+-- ================= 自动吃水晶（V4） =================
+-- V3 的问题：自己重新扫一遍、自己再造一套门控，结果「立即吃」也不动；而手动传送按钮一直好用。
+-- V4 完全复用手动按钮的数据源（refresh 生成的 lootCache）和传送方式（+4 格），
+--     只在其上叠加「吃不到就换下一个」，不再引入第二套逻辑。
 local pickR = 8
-local skipUntil = setmetatable({}, { __mode = "k" })  -- [part] = 到期时间
-local tries = setmetatable({}, { __mode = "k" })      -- [part] = 已尝试次数
-local lastGo = setmetatable({}, { __mode = "k" })     -- [part] = 上次尝试时间
-local skipCnt = setmetatable({}, { __mode = "k" })    -- [part] = 已跳过次数
+local skipUntil = setmetatable({}, { __mode = "k" })   -- [part] = 到期时间
+local failCnt = setmetatable({}, { __mode = "k" })     -- [part] = 失败次数
+local pickName, pickDist, skippedCount = "无", 0, 0
+local dbg = { tick = 0, hits = 0, scanned = 0, lastErr = "" }
 
--- 注意：Roblox 里 os.clock() 是 CPU 时间，空等时几乎不走，不能当真实秒表用。
--- 这里用 Heartbeat 累加出真实秒数，门控才不会永远不满足。
+-- Roblox 的 os.clock() 是 CPU 时间，空等时不走，必须用真实秒数
 local clock = 0
 RUN.Heartbeat:Connect(function(dt) clock = clock + dt end)
 local function nowT() return clock end
 
-local pickName, pickDist, skippedCount = "无", 0, 0
-local dbg = { tick = 0, hits = 0, scanned = 0, lastErr = "" }
-local scanBuf, scanAt = -10
-
 local function resetPickState()
 	skipUntil = setmetatable({}, { __mode = "k" })
-	tries = setmetatable({}, { __mode = "k" })
-	lastGo = setmetatable({}, { __mode = "k" })
-	skipCnt = setmetatable({}, { __mode = "k" })
-	skippedCount, pickName, pickDist = 0, "无", 0
+	failCnt = setmetatable({}, { __mode = "k" })
+	pickName, pickDist, skippedCount = "无", 0, 0
 	dbg.hits, dbg.lastErr = 0, ""
 end
 
-local function fireLoot(o)
+-- 和「传送到最近的碎片」按钮完全一样的传送写法
+local function hopTo(part)
+	local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+	if not root or not part or not part.Parent then return false end
+	return pcall(function()
+		root.CFrame = CFrame.new(part.Position + Vector3.new(0, 4, 0))
+	end)
+end
+
+local function triggerPickups(part)
 	pcall(function()
-		local obj = o.obj
-		local list = {}
-		if obj:IsA("BasePart") then list = { obj } else list = obj:GetDescendants() end
-		for _, x in ipairs(list) do
-			if x:IsA("ProximityPrompt") then
-				if x.Enabled then
-					local hold = 0
-					pcall(function() hold = x.HoldDuration or 0 end)
-					if fireproximityprompt then fireproximityprompt(x, hold) end
+		local m = part:FindFirstAncestorOfClass("Model") or part
+		for _, x in ipairs(m:GetDescendants()) do
+			if x:IsA("ProximityPrompt") and x.Enabled then
+				if fireproximityprompt then
+					pcall(function() fireproximityprompt(x, x.HoldDuration or 0.2) end)
 				end
 			elseif x:IsA("ClickDetector") then
-				if fireclickdetector then fireclickdetector(x) end
+				if fireclickdetector then pcall(function() fireclickdetector(x) end) end
 			end
 		end
 	end)
 end
 
-local function goLoot(o, root, dist)
-	local part = o.part
-	if not part or not part.Parent then return end
-	tries[part] = (tries[part] or 0) + 1
-	lastGo[part] = nowT()
-	pickName, pickDist = tostring(o.label or part.Name), math.floor(dist)
-
-	if dist <= pickR then fireLoot(o) end
-
-	if dist > 2.5 then
-		pcall(function() root.CFrame = CFrame.new(part.Position + Vector3.new(0, 2.5, 0)) end)
+-- 由 lootCache（手动按钮用的同一份数据）生成按距离升序的候选表
+local function candidates(root)
+	local list = {}
+	for _, o in ipairs(lootCache) do
+		local p = o and o.part
+		if p and p.Parent then
+			list[#list + 1] = { part = p, d = (root.Position - p.Position).Magnitude, label = o.label }
+		end
 	end
+	table.sort(list, function(a, b) return a.d < b.d end)
+	return list
+end
+
+local function eatOne(target)
+	local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+	if not root or not target or not target.Parent then return false end
+	local d = (root.Position - target.Position).Magnitude
+	pickName, pickDist = tostring(target.Name), math.floor(d)
+	dbg.hits = dbg.hits + 1
+
+	hopTo(target)
+	if d <= pickR then triggerPickups(target) end
+
+	task.delay(0.3, function()
+		triggerPickups(target)
+		if target.Parent then
+			pcall(function()
+				local r = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+				if r then r.CFrame = CFrame.new(target.Position) end   -- 直接叠上去，触发 Touched
+			end)
+			task.delay(0.25, function() triggerPickups(target) end)
+		end
+	end)
 
 	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
-	if hum then pcall(function() hum:MoveTo(part.Position) end) end
-
-	task.delay(0.3, function() fireLoot(o) end)
-
-	-- 2 秒还没消失就认为这个吃不到：跳过 15 秒；同一处连续 3 轮不行就整局放弃
-	task.delay(2, function()
-		if not (part and part.Parent) then
-			tries[part] = nil
-			return
-		end
-		skipCnt[part] = (skipCnt[part] or 0) + 1
-		tries[part] = 0
-		skippedCount = skippedCount + 1
-		if skipCnt[part] >= 3 then
-			skipUntil[part] = math.huge
-		else
-			skipUntil[part] = nowT() + 15
-		end
-	end)
-end
-
--- 给「立刻吃最近的一个」和诊断用的选择函数
-local function pickNearest(root, now)
-	local best, bd = nil, math.huge
-	for _, o in ipairs(scanBuf) do
-		local part = o.part
-		if part and part.Parent then
-			local tr = 0
-			pcall(function() tr = part.Transparency end)
-			if tr < 0.98 and (skipUntil[part] or 0) < now then
-				local d = (root.Position - part.Position).Magnitude
-				if d < bd then bd, best = d, o end
-			end
-		end
-	end
-	return best, bd
+	if hum then pcall(function() hum:MoveTo(target.Position) end) end
+	return true
 end
 
 task.spawn(function()
 	while true do
-		task.wait(0.25)
+		task.wait(0.4)
 		dbg.tick = dbg.tick + 1
 		if cfg.crystalOn then
 			local ok, err = pcall(function()
-				local ch = LP.Character
-				local root = ch and ch:FindFirstChild("HumanoidRootPart")
+				local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 				if not root then
 					dbg.lastErr = "角色还没加载好"
 					return
 				end
 				local now = nowT()
-				if now - scanAt > 1 then
-					scanBuf = collectByKW(LOOT_KW, 120)
-					scanAt = now
-				end
-				dbg.scanned = #scanBuf
-				if #scanBuf == 0 then
-					dbg.lastErr = "扫不到目标（关键字没匹配到）"
+				local list = candidates(root)
+				dbg.scanned = #list
+				if #list == 0 then
+					dbg.lastErr = "扫不到目标：先把「碎片透视」打开一下"
 					return
 				end
-				local best, bd = nil, math.huge
-				for _, o in ipairs(scanBuf) do
-					local part = o.part
-					if part and part.Parent then
-						local tr = 0
-						pcall(function() tr = part.Transparency end)
-						if tr < 0.98 and (skipUntil[part] or 0) < now and (now - (lastGo[part] or 0)) > 1 then
-							local d = (root.Position - part.Position).Magnitude
-							if d < bd then bd, best = d, o end
-						end
+
+				local target
+				for _, c in ipairs(list) do
+					if (skipUntil[c.part] or 0) < now then
+						target = c.part
+						break
 					end
 				end
-				if not best then
-					dbg.lastErr = "目标都在冷却中，稍等"
+				if not target then
+					dbg.lastErr = "所有目标都在跳过冷却里，点「清空跳过记录」"
 					return
 				end
-				if bd > 600 then
-					dbg.lastErr = "最近目标 " .. math.floor(bd) .. " 格，超出范围"
-					return
-				end
+
 				dbg.lastErr = ""
-				dbg.hits = dbg.hits + 1
-				goLoot(best, root, bd)
+				if eatOne(target) then
+					task.delay(1.8, function()
+						if target.Parent then
+							failCnt[target] = (failCnt[target] or 0) + 1
+							skippedCount = skippedCount + 1
+							-- 不永久拉黑：8 秒、16 秒…最多 60 秒后再试
+							skipUntil[target] = nowT() + math.min(60, 8 * failCnt[target])
+						else
+							failCnt[target] = nil
+						end
+					end)
+				end
 			end)
 			if not ok then
 				dbg.lastErr = "报错：" .. tostring(err)
@@ -662,16 +646,27 @@ T1:Slider({Title = "拾取范围（触发 prompt 的距离）", Value = {Min = 2
 	pickR = v
 end})
 T1:Button({Title = "自动吃水晶诊断（不传送也能看）", Callback = function()
+	local withP, withC = 0, 0
+	for _, o in ipairs(lootCache) do
+		if o.part and o.part.Parent then
+			pcall(function()
+				local m = o.part:FindFirstAncestorOfClass("Model") or o.part
+				if m:FindFirstChildWhichIsA("ProximityPrompt", true) then withP = withP + 1 end
+				if m:FindFirstChildWhichIsA("ClickDetector", true) then withC = withC + 1 end
+			end)
+		end
+	end
 	WindUI:Notify({
 		Title = "自动吃水晶 · 运行状态",
 		Content = "开关：" .. tostring(cfg.crystalOn)
-			.. "\n扫描到目标：" .. dbg.scanned .. " 个"
+			.. "\n目标总数：" .. dbg.scanned .. " 个（缓存 " .. #lootCache .. "）"
+			.. "\n其中带提示键：" .. withP .. " 个｜带点击器：" .. withC .. " 个"
 			.. "\n已出手次数：" .. dbg.hits
 			.. "\n当前锁定：" .. pickName .. "（" .. pickDist .. " 格）"
 			.. "\n已跳过：" .. skippedCount
 			.. "\n心跳计数：" .. dbg.tick
 			.. "\n说明：" .. (dbg.lastErr ~= "" and dbg.lastErr or "运行正常"),
-		Duration = 12,
+		Duration = 14,
 	})
 end})
 
@@ -718,15 +713,25 @@ T3:Button({Title = "立刻吃最近的一个（手动）", Callback = function()
 		WindUI:Notify({Title = "手动吃", Content = "角色还没加载好", Duration = 4})
 		return
 	end
-	scanBuf = collectByKW(LOOT_KW, 120)
-	scanAt = nowT()
-	local best, bd = pickNearest(root, nowT())
-	if not best then
-		WindUI:Notify({Title = "手动吃", Content = "没有可选目标（扫到 " .. #scanBuf .. " 个，可能都在跳过冷却里）", Duration = 6})
+	pcall(refresh)
+	local list = candidates(root)
+	if #list == 0 then
+		WindUI:Notify({Title = "手动吃", Content = "没有碎片数据，先打开「碎片透视」或「自动吃水晶」", Duration = 6})
 		return
 	end
-	goLoot(best, root, bd)
-	WindUI:Notify({Title = "手动吃", Content = "已飞向 " .. tostring(best.label) .. "（" .. math.floor(bd) .. " 格）", Duration = 5})
+	local now = nowT()
+	local target
+	for _, c in ipairs(list) do
+		if (skipUntil[c.part] or 0) < now then target = c.part break end
+	end
+	if not target then target = list[1].part end
+	local d = (root.Position - target.Position).Magnitude
+	eatOne(target)
+	WindUI:Notify({Title = "手动吃", Content = "已飞向 " .. tostring(target.Name) .. "（" .. math.floor(d) .. " 格）", Duration = 5})
+end})
+T3:Button({Title = "清空跳过记录（卡住不动就点这个）", Callback = function()
+	resetPickState()
+	WindUI:Notify({Title = "自动吃水晶", Content = "跳过记录已清空，现在会重新从最近的一个开始", Duration = 5})
 end})
 T3:Toggle({Title = "自动开门（靠近自动触发）", Value = false, Callback = function(v)
 	cfg.autoDoor = v
