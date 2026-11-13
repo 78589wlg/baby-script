@@ -1,7 +1,7 @@
--- 婴儿脚本 · 被追捕（HUNTED）V4
+-- 婴儿脚本 · 被追捕（HUNTED）V5
 -- 门透视 / 碎片透视 / 穿墙 / 速度 / 全亮 / 自动开门 / 传送
 -- 适配：HUNTED [HALLOWEEN EVENT] (PlaceId 136431686349723)
--- V4 自动吃水晶：复用手动传送的成功路径，吃不到自动换目标
+-- V5 自动吃水晶：吃到即走，单个目标最多占 0.9 秒
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -373,7 +373,7 @@ local pickR = 8
 local skipUntil = setmetatable({}, { __mode = "k" })   -- [part] = 到期时间
 local failCnt = setmetatable({}, { __mode = "k" })     -- [part] = 失败次数
 local pickName, pickDist, skippedCount = "无", 0, 0
-local dbg = { tick = 0, hits = 0, scanned = 0, lastErr = "" }
+local dbg = { tick = 0, hits = 0, got = 0, scanned = 0, lastErr = "" }
 
 -- Roblox 的 os.clock() 是 CPU 时间，空等时不走，必须用真实秒数
 local clock = 0
@@ -384,7 +384,7 @@ local function resetPickState()
 	skipUntil = setmetatable({}, { __mode = "k" })
 	failCnt = setmetatable({}, { __mode = "k" })
 	pickName, pickDist, skippedCount = "无", 0, 0
-	dbg.hits, dbg.lastErr = 0, ""
+	dbg.hits, dbg.got, dbg.lastErr = 0, 0, ""
 end
 
 -- 和「传送到最近的碎片」按钮完全一样的传送写法
@@ -424,6 +424,8 @@ local function candidates(root)
 	return list
 end
 
+-- 一次「飞过去 → 触发 → 确认吃到」：吃到立即返回（约 0.2~0.4 秒），
+-- 不再固定等 1.8 秒；吃不到最多占 0.9 秒。
 local function eatOne(target)
 	local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 	if not root or not target or not target.Parent then return false end
@@ -434,25 +436,36 @@ local function eatOne(target)
 	hopTo(target)
 	if d <= pickR then triggerPickups(target) end
 
-	task.delay(0.3, function()
-		triggerPickups(target)
-		if target.Parent then
-			pcall(function()
-				local r = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-				if r then r.CFrame = CFrame.new(target.Position) end   -- 直接叠上去，触发 Touched
-			end)
-			task.delay(0.25, function() triggerPickups(target) end)
-		end
-	end)
-
 	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
 	if hum then pcall(function() hum:MoveTo(target.Position) end) end
-	return true
+
+	local t0 = nowT()
+	local stage = 0
+	while nowT() - t0 < 0.9 do
+		if not target.Parent then return true end
+		local el = nowT() - t0
+		if stage == 0 and el > 0.15 then
+			stage = 1
+			pcall(function()
+				local r = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+				if r and target.Parent then r.CFrame = CFrame.new(target.Position) end
+			end)
+			triggerPickups(target)
+		elseif stage == 1 and el > 0.45 then
+			stage = 2
+			triggerPickups(target)
+		end
+		task.wait(0.05)
+	end
+	return target.Parent == nil
 end
+
+-- 候选表每 0.4 秒重建一次，避免每轮都排序 100 多项
+local candCache, candAt = {}, 0
 
 task.spawn(function()
 	while true do
-		task.wait(0.4)
+		task.wait(cfg.crystalOn and 0.05 or 0.4)
 		dbg.tick = dbg.tick + 1
 		if cfg.crystalOn then
 			local ok, err = pcall(function()
@@ -462,7 +475,11 @@ task.spawn(function()
 					return
 				end
 				local now = nowT()
-				local list = candidates(root)
+				if now - candAt > 0.4 then
+					candCache = candidates(root)
+					candAt = now
+				end
+				local list = candCache
 				dbg.scanned = #list
 				if #list == 0 then
 					dbg.lastErr = "扫不到目标：先把「碎片透视」打开一下"
@@ -478,21 +495,20 @@ task.spawn(function()
 				end
 				if not target then
 					dbg.lastErr = "所有目标都在跳过冷却里，点「清空跳过记录」"
+					task.wait(0.2)
 					return
 				end
 
 				dbg.lastErr = ""
 				if eatOne(target) then
-					task.delay(1.8, function()
-						if target.Parent then
-							failCnt[target] = (failCnt[target] or 0) + 1
-							skippedCount = skippedCount + 1
-							-- 不永久拉黑：8 秒、16 秒…最多 60 秒后再试
-							skipUntil[target] = nowT() + math.min(60, 8 * failCnt[target])
-						else
-							failCnt[target] = nil
-						end
-					end)
+					failCnt[target] = nil
+					dbg.got = dbg.got + 1
+				else
+					local n = (failCnt[target] or 0) + 1
+					failCnt[target] = n
+					skippedCount = skippedCount + 1
+					-- 吃不到：2、4、6…最多 20 秒后再来，不永久拉黑
+					skipUntil[target] = nowT() + math.min(20, 2 * n)
 				end
 			end)
 			if not ok then
@@ -662,6 +678,7 @@ T1:Button({Title = "自动吃水晶诊断（不传送也能看）", Callback = f
 			.. "\n目标总数：" .. dbg.scanned .. " 个（缓存 " .. #lootCache .. "）"
 			.. "\n其中带提示键：" .. withP .. " 个｜带点击器：" .. withC .. " 个"
 			.. "\n已出手次数：" .. dbg.hits
+			.. "\n已吃到：" .. dbg.got .. " 个"
 			.. "\n当前锁定：" .. pickName .. "（" .. pickDist .. " 格）"
 			.. "\n已跳过：" .. skippedCount
 			.. "\n心跳计数：" .. dbg.tick
