@@ -1,5 +1,6 @@
 -- 婴儿脚本 · Prison Life（监狱人生）
--- PlaceId 155615604 · 远程名取自游戏客户端反编译文档
+-- V2：按开源脚本(PrisonBreaker/PrisonX)验证过的真实接口重写
+-- 换队=TeamEvent+颜色名 / 逮捕=arrest:InvokeServer(part) / 取物=ItemHandler / 传送=实测坐标
 if getgenv().PL_Unload then pcall(getgenv().PL_Unload) end
 
 local WindUI = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
@@ -19,7 +20,7 @@ local cfg = {
 	autoFire = false, gunMod = false,
 	autoArrest = false, arrestRange = 30, handcuff = true,
 	autoPick = false,
-	fly = false, flySpeed = 60,
+	fly = false, flySpeed = 60, antiSlow = true,
 	noclip = false, infJump = false, god = false,
 }
 
@@ -39,16 +40,18 @@ local function hum()
 end
 
 -- ================= 远程 =================
-local function remote(name)
-	local r = RS:FindFirstChild("Remotes")
-	if r then
-		local a = r:FindFirstChild(name)
-		if a then return a end
+local function containers()
+	local out = {}
+	for _, c in ipairs({ WS:FindFirstChild("Remote"), RS:FindFirstChild("Remote"), RS:FindFirstChild("Remotes") }) do
+		if c then out[#out + 1] = c end
 	end
-	local old = WS:FindFirstChild("Remote")
-	if old then
-		local b = old:FindFirstChild(name)
-		if b then return b end
+	return out
+end
+
+local function remote(name)
+	for _, cont in ipairs(containers()) do
+		local f = cont:FindFirstChild(name)
+		if f then return f end
 	end
 	return RS:FindFirstChild(name)
 end
@@ -97,7 +100,7 @@ local function pickupOf(name)
 	return nil
 end
 
-local GIVE_ORDER = { "InteractWithItem", "GiverPressed", "TouchGiver", "ItemHandler" }
+local GIVE_ORDER = { "ItemHandler", "InteractWithItem", "GiverPressed", "TouchGiver" }
 
 local function giveItem(name)
 	local pp = pickupOf(name)
@@ -182,6 +185,23 @@ local function equippedTool()
 end
 
 -- ================= 目标 =================
+-- 换队：真实接口是 TeamEvent:FireServer(BrickColor 名)
+local TEAM_ARG = {
+	Guards = { "Bright blue" },
+	Inmates = { "Bright orange" },
+	Criminals = { "Bright red", "Really red" },
+}
+
+local function changeTeam(key)
+	local ev = remote("TeamEvent")
+	if not ev then return false, "没有 TeamEvent 远程" end
+	for _, arg in ipairs(TEAM_ARG[key] or { key }) do
+		pcall(function() ev:FireServer(arg) end)
+		task.wait(0.2)
+	end
+	return true
+end
+
 local function others(range)
 	local out = {}
 	local r = root()
@@ -200,10 +220,25 @@ local function others(range)
 	return out
 end
 
+local TEAMS = game:GetService("Teams")
+
 local function criminals(range)
-	local out = {}
-	for _, pl in ipairs(others(range)) do
-		if (pl.Team and pl.Team.Name or "") == "Criminals" then out[#out + 1] = pl end
+	local out, seen = {}, {}
+	local team = TEAMS:FindFirstChild("Criminals")
+	local r = root()
+	if team then
+		for _, pl in ipairs(team:GetPlayers()) do
+			local tr = pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")
+			if pl ~= LP and tr and r and (not range or (tr.Position - r.Position).Magnitude <= range) and not seen[pl] then
+				seen[pl] = true
+				out[#out + 1] = pl
+			end
+		end
+	end
+	if #out == 0 then
+		for _, pl in ipairs(others(range)) do
+			if (pl.Team and pl.Team.Name or "") == "Criminals" then out[#out + 1] = pl end
+		end
 	end
 	if #out == 0 then return others(range) end
 	return out
@@ -379,18 +414,19 @@ end
 local function arrestOne(pl)
 	local c = pl.Character
 	local tr = c and c:FindFirstChild("HumanoidRootPart")
-	if not tr then return false end
+	if not tr then return false, "目标没有 HRP" end
+	local ev = remote("arrest")
+	if not ev then return false, "没找到 arrest 远程" end
 	local r = root()
-	if r and (tr.Position - r.Position).Magnitude > 8 then
-		call("RequestHere", tr.Position)
-		task.wait(0.12)
-		pcall(function() r.CFrame = tr.CFrame + Vector3.new(0, 0, 2) end)
+	if r and (tr.Position - r.Position).Magnitude > 9 then
+		pcall(function() r.CFrame = tr.CFrame * CFrame.new(0, 0, 1.5) end)
+		task.wait(0.06)
 	end
 	if cfg.handcuff then equipCuffs() end
-	call("ArrestPlayer", pl)
-	call("ArrestPlayer", c)
-	local hd = c:FindFirstChild("Head")
-	if hd then call("ArrestPlayer", hd) end
+	for _ = 1, 3 do
+		pcall(function() ev:InvokeServer(tr) end)
+		task.wait(0.04)
+	end
 	return true
 end
 
@@ -453,7 +489,7 @@ task.spawn(function()
 				end
 			end
 			if cfg.god and h.Health < h.MaxHealth then h.Health = h.MaxHealth end
-			if not cfg.fly then
+			if not cfg.fly and cfg.antiSlow then
 				if h.WalkSpeed ~= cfg.speed then h.WalkSpeed = cfg.speed end
 			end
 			if h.JumpPower ~= cfg.jump then h.JumpPower = cfg.jump end
@@ -488,15 +524,11 @@ end)
 
 -- ================= 传送点 =================
 local PLACES = {
-	{ "食堂", "Cafeteria" },
-	{ "院子", "Yard" },
-	{ "军械库", "Armory" },
-	{ "牢房", "Cell" },
-	{ "健身房", "Gym" },
-	{ "屋顶", "Roof" },
-	{ "塔楼", "Tower" },
-	{ "草坪", "Lawn" },
-	{ "机库", "Hangar" },
+	{ "监狱区 Prison", Vector3.new(918.77, 100, 2379.07) },
+	{ "院子 Yard", Vector3.new(779.87, 98, 2458.93) },
+	{ "警卫室 Guard Room", Vector3.new(822.67, 99.49, 2264.41) },
+	{ "罪犯基地 Crim Base", Vector3.new(-975.79, 109.32, 2053) },
+	{ "越狱点 Escape", Vector3.new(465.9, 98.19, 2253.47) },
 }
 
 local function findPlace(kw)
@@ -511,11 +543,7 @@ end
 local function tpTo(pos)
 	local r = root()
 	if not r then return end
-	call("RequestHere", pos)
-	task.wait(0.2)
-	if r and r.Parent then
-		pcall(function() r.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0)) end)
-	end
+	pcall(function() r.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) end)
 end
 
 -- ================= 界面 =================
@@ -563,14 +591,16 @@ T1:Toggle({
 
 T1:Section({ Title = "身份" })
 T1:Button({ Title = "变成狱警 Guards", Callback = function()
-	local ok = call("RequestTeamChange", "Guards")
-	notif("身份", ok and "已请求切换" or "远程不可用")
+	local ok, why = changeTeam("Guards")
+	notif("身份", ok and "已发送 TeamEvent（Bright blue）" or tostring(why))
 end })
 T1:Button({ Title = "变成囚犯 Inmates", Callback = function()
-	call("RequestTeamChange", "Inmates"); notif("身份", "已请求切换")
+	local ok, why = changeTeam("Inmates")
+	notif("身份", ok and "已发送 TeamEvent（Bright orange）" or tostring(why))
 end })
 T1:Button({ Title = "变成罪犯 Criminals", Callback = function()
-	call("RequestTeamChange", "Criminals"); notif("身份", "已请求切换")
+	local ok, why = changeTeam("Criminals")
+	notif("身份", ok and "已发送 TeamEvent（Bright red）" or tostring(why))
 end })
 T1:Button({ Title = "重新加载角色", Callback = function()
 	local ok = call("loadchar")
@@ -615,13 +645,8 @@ for _, p in ipairs(PLACES) do
 	T5:Button({
 		Title = p[1],
 		Callback = function()
-			local part = findPlace(p[2])
-			if part then
-				tpTo(part.Position)
-				notif("传送", "已到 " .. p[1])
-			else
-				notif("传送", "本局没找到 " .. p[1])
-			end
+			tpTo(p[2])
+			notif("传送", "已到 " .. p[1])
 		end,
 	})
 end
@@ -655,27 +680,60 @@ T6:Toggle({ Title = "物品高亮（武器/手铐）", Value = false, Callback =
 end })
 T6:Slider({ Title = "显示距离", Value = { Min = 50, Max = 2000, Default = 600 }, Callback = function(v) cfg.espDist = v end })
 
+local T6b = Win:Tab({ Title = "其他", Icon = "zap" })
+T6b:Section({ Title = "攻击" })
+T6b:Button({ Title = "近身秒杀（最近的玩家）", Desc = "调用 meleeEvent，需要靠近目标", Callback = function()
+	local me = remote("meleeEvent") or RS:FindFirstChild("meleeEvent")
+	if not me then notif("超拳", "没有 meleeEvent 远程"); return end
+	local r = root()
+	local best, bd = nil, 1e9
+	for _, pl in ipairs(others(60)) do
+		local tr = pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")
+		if tr and r then
+			local d = (tr.Position - r.Position).Magnitude
+			if d < bd then bd, best = d, pl end
+		end
+	end
+	if not best then notif("超拳", "附近 60 格内没人"); return end
+	for _ = 1, 60 do pcall(function() me:FireServer(best) end) end
+	notif("超拳", ("已对 %s 打了 60 次（%.0f 格）"):format(best.Name, bd))
+end })
+
+T6b:Section({ Title = "防护（仅本地）" })
+T6b:Toggle({ Title = "防电击 / 防减速", Desc = "被电或被铐时把移速抢回来", Value = true, Callback = function(v) cfg.antiSlow = v end })
+T6b:Button({ Title = "脱手铐（删掉角色里的手铐）", Callback = function()
+	local c = ch()
+	local n = 0
+	if c then
+		for _, d in ipairs(c:GetDescendants()) do
+			if d.Name == "Handcuffs" then pcall(function() d:Destroy() end); n = n + 1 end
+		end
+	end
+	notif("防护", n > 0 and ("删掉 " .. n .. " 个手铐") or "身上没有手铐")
+end })
+
 local T7 = Win:Tab({ Title = "设置", Icon = "settings" })
 T7:Section({ Title = "诊断" })
 T7:Button({ Title = "复制环境报告", Callback = function()
 	local lines = {}
 	lines[#lines + 1] = "== Prison Life 环境 =="
 	lines[#lines + 1] = "PlaceId=" .. tostring(game.PlaceId) .. " 队伍=" .. tostring(LP.Team and LP.Team.Name)
-	local rsr = RS:FindFirstChild("Remotes")
-	lines[#lines + 1] = "Remotes 容器=" .. (rsr and "有" or "无")
-	if rsr then
+	local conts = containers()
+	lines[#lines + 1] = "Remote 容器数=" .. #conts
+	for _, cont in ipairs(conts) do
 		local names = {}
-		for _, c in ipairs(rsr:GetChildren()) do names[#names + 1] = c.Name end
+		for _, c in ipairs(cont:GetChildren()) do names[#names + 1] = c.Name end
 		table.sort(names)
-		lines[#lines + 1] = "Remotes: " .. table.concat(names, ", ")
+		local where = cont.Parent == WS and "Workspace" or (cont.Parent == RS and "ReplicatedStorage" or tostring(cont.Parent))
+		lines[#lines + 1] = where .. "." .. cont.Name .. ": " .. table.concat(names, ", ")
 	end
-	local old = WS:FindFirstChild("Remote")
-	if old then
-		local names = {}
-		for _, c in ipairs(old:GetChildren()) do names[#names + 1] = c.Name end
-		table.sort(names)
-		lines[#lines + 1] = "workspace.Remote: " .. table.concat(names, ", ")
+	local need = { "TeamEvent", "arrest", "ItemHandler", "meleeEvent" }
+	local got = {}
+	for _, nm in ipairs(need) do
+		local r = remote(nm)
+		got[#got + 1] = nm .. "=" .. (r and r.ClassName or "无")
 	end
+	lines[#lines + 1] = "关键远程: " .. table.concat(got, " | ")
 	lines[#lines + 1] = "物品条目: " .. table.concat(itemNames(), ", ")
 	local guns = {}
 	for _, t in ipairs(gunTools()) do guns[#guns + 1] = t.Name end
