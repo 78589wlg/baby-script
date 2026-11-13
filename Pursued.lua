@@ -1,6 +1,7 @@
--- 婴儿脚本 · 被追捕（HUNTED）V1
+-- 婴儿脚本 · 被追捕（HUNTED）V2
 -- 门透视 / 碎片透视 / 穿墙 / 速度 / 全亮 / 自动开门 / 传送
 -- 适配：HUNTED [HALLOWEEN EVENT] (PlaceId 136431686349723)
+-- V2 自动吃水晶重写：不再死盯一个目标，吃不到会换下一个
 
 local P = game:GetService("Players")
 local LP = P.LocalPlayer
@@ -222,8 +223,20 @@ local function scanInto(root, depth, kws, out, limit)
 end
 
 local function collectByKW(kws, limit)
-	local out = {}
-	pcall(function() scanInto(WS, 2, kws, out, limit) end)
+	local raw = {}
+	pcall(function() scanInto(WS, 2, kws, raw, limit * 3) end)
+	-- 同一个 Model / Folder 只保留一条，否则一个水晶的多个零件会被当成多个目标
+	local seen, out = {}, {}
+	for _, o in ipairs(raw) do
+		local key = o.obj
+		if key and not seen[key] then
+			seen[key] = true
+			out[#out + 1] = o
+		end
+	end
+	for i = #out, limit + 1, -1 do
+		out[i] = nil
+	end
 	return out
 end
 
@@ -352,34 +365,107 @@ task.spawn(function()
 	end
 end)
 
--- ================= 自动吃水晶 =================
+-- ================= 自动吃水晶（V2） =================
+-- 旧版问题：只认「最近的那个」，吃不到就原地无限传送同一个点。
+-- 新版：按模型去重 → 同一目标最多试 2 次 → 还不消失就跳过 15 秒换下一个。
+local pickR = 8
+local skipUntil = setmetatable({}, { __mode = "k" })  -- [obj] = 到期时间
+local tries = setmetatable({}, { __mode = "k" })      -- [obj] = 已尝试次数
+local lastGo = setmetatable({}, { __mode = "k" })     -- [obj] = 上次尝试时间
+local skipCnt = setmetatable({}, { __mode = "k" })    -- [obj] = 已跳过次数
+local curTarget, curDist, skippedCount = nil, 0, 0
+
+local function lootAlive(o)
+	local p = o and o.part
+	return p ~= nil and p.Parent ~= nil
+end
+
+local function fireLoot(o)
+	pcall(function()
+		local obj = o.obj
+		local list = {}
+		if obj:IsA("BasePart") then list = { obj } else list = obj:GetDescendants() end
+		for _, x in ipairs(list) do
+			if x:IsA("ProximityPrompt") then
+				if x.Enabled then
+					local hold = 0
+					pcall(function() hold = x.HoldDuration or 0 end)
+					if fireproximityprompt then fireproximityprompt(x, hold) end
+				end
+			elseif x:IsA("ClickDetector") then
+				if fireclickdetector then fireclickdetector(x) end
+			end
+		end
+	end)
+end
+
+local function goLoot(o, root, dist)
+	local part = o.part
+	if not part or not part.Parent then return end
+	tries[o.obj] = (tries[o.obj] or 0) + 1
+	lastGo[o.obj] = os.clock()
+	curTarget, curDist = o, dist
+
+	-- 1) 在拾取半径内先直接触发，很多水晶不用走到跟前
+	if dist <= pickR then fireLoot(o) end
+
+	-- 2) 瞬移到水晶正上方
+	if dist > 3 then
+		pcall(function() root.CFrame = CFrame.new(part.Position + Vector3.new(0, 2.5, 0)) end)
+	end
+
+	-- 3) 让角色真的走过去（有些拾取是 Touched，瞬移不触发）
+	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	if hum then
+		pcall(function() hum:MoveTo(part.Position) end)
+	end
+
+	-- 4) 落地后再补一次
+	task.delay(0.3, function() fireLoot(o) end)
+
+	-- 5) 1.5 秒后检查：还在 → 试第二次；第二次还在 → 跳过 15 秒
+	task.delay(1.5, function()
+		if not lootAlive(o) then
+			tries[o.obj] = nil
+			return
+		end
+		if (tries[o.obj] or 0) >= 2 then
+			skipCnt[o.obj] = (skipCnt[o.obj] or 0) + 1
+			if skipCnt[o.obj] >= 3 then
+				-- 同一个点试了三轮还是吃不到，本次会话直接放弃它，别再传送过去
+				skipUntil[o.obj] = math.huge
+			else
+				skipUntil[o.obj] = os.clock() + 15
+			end
+			tries[o.obj] = 0
+			skippedCount = skippedCount + 1
+		end
+	end)
+end
+
 task.spawn(function()
 	while true do
 		task.wait(0.3)
 		if cfg.crystalOn then
-			local ok = pcall(function()
-				local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+			pcall(function()
+				local ch = LP.Character
+				local root = ch and ch:FindFirstChild("HumanoidRootPart")
 				if not root then return end
+				local now = os.clock()
 				local best, bd = nil, math.huge
 				for _, o in ipairs(lootCache) do
 					local part = o.part
 					if part and part.Parent then
-						local d = (root.Position - part.Position).Magnitude
-						if d < bd then bd, best = d, o end
-					end
-				end
-				if not best or bd > 300 then return end
-				if bd > 6 then
-					root.CFrame = CFrame.new(best.part.Position + Vector3.new(0, 3, 0))
-				else
-					for _, x in ipairs(best.obj:GetDescendants()) do
-						if x:IsA("ProximityPrompt") and x.Enabled then
-							if fireproximityprompt then fireproximityprompt(x, 0) end
-						elseif x:IsA("ClickDetector") then
-							if fireclickdetector then fireclickdetector(x) end
+						local okp = true
+						pcall(function() if part.Transparency >= 0.98 then okp = false end end)
+						if okp and (skipUntil[o.obj] or 0) < now and (now - (lastGo[o.obj] or 0)) > 1.2 then
+							local d = (root.Position - part.Position).Magnitude
+							if d < bd then bd, best = d, o end
 						end
 					end
 				end
+				if not best or bd > 350 then return end
+				goLoot(best, root, bd)
 			end)
 		end
 	end
@@ -518,7 +604,30 @@ end})
 
 T1:Toggle({Title = "自动吃水晶（自动飞过去拾取）", Value = false, Callback = function(v)
 	cfg.crystalOn = v
-	WindUI:Notify({Title = "自动吃水晶", Content = v and "已开启，会自动飞向最近的碎片" or "已关闭", Duration = 4})
+	if v then
+		skipUntil = setmetatable({}, { __mode = "k" })
+		tries = setmetatable({}, { __mode = "k" })
+		lastGo = setmetatable({}, { __mode = "k" })
+		skipCnt = setmetatable({}, { __mode = "k" })
+		skippedCount = 0
+		task.defer(function() pcall(refresh) end)
+	end
+	WindUI:Notify({Title = "自动吃水晶", Content = v and "已开启：吃不到会自动换下一个" or "已关闭", Duration = 4})
+end})
+T1:Slider({Title = "拾取范围（触发 prompt 的距离）", Value = {Min = 2, Max = 20, Default = 8}, Callback = function(v)
+	pickR = v
+end})
+T1:Button({Title = "查看自动吃水晶状态", Callback = function()
+	local name = "无"
+	if curTarget and curTarget.part and curTarget.part.Parent then
+		name = tostring(curTarget.label or curTarget.part.Name)
+	end
+	WindUI:Notify({
+		Title = "自动吃水晶",
+		Content = "当前目标：" .. name .. "｜剩余距离 " .. math.floor(curDist)
+			.. "｜已跳过 " .. skippedCount .. " 个｜待扫描目标 " .. #lootCache,
+		Duration = 7,
+	})
 end})
 
 T1:Section({Title = "说明"})
@@ -566,6 +675,29 @@ T3:Button({Title = "重新扫描地图", Callback = function()
 	pcall(refresh)
 	pcall(hookDoorsForUsed)
 	WindUI:Notify({Title = "扫描", Content = "门 " .. stats.doors .. " 个｜目标 " .. stats.loot .. " 个", Duration = 5})
+end})
+T3:Button({Title = "看看扫到了哪些目标（前 10 个）", Callback = function()
+	if #lootCache == 0 then
+		WindUI:Notify({Title = "扫描结果", Content = "一个都没扫到：先打开「自动吃水晶」或「碎片透视」再点这里", Duration = 7})
+		return
+	end
+	local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+	local lines = {}
+	for i = 1, math.min(10, #lootCache) do
+		local o = lootCache[i]
+		local d = "?"
+		if root and o.part and o.part.Parent then
+			d = tostring(math.floor((root.Position - o.part.Position).Magnitude))
+		end
+		local mark = ""
+		pcall(function()
+			if o.obj:FindFirstChildWhichIsA("ProximityPrompt", true) then mark = mark .. "P" end
+			if o.obj:FindFirstChildWhichIsA("ClickDetector", true) then mark = mark .. "C" end
+			if o.obj:IsA("BasePart") and o.obj.Transparency >= 0.98 then mark = mark .. "隐" end
+		end)
+		lines[#lines + 1] = i .. ". " .. tostring(o.label) .. " [" .. d .. "]" .. (mark ~= "" and (" " .. mark) or "")
+	end
+	WindUI:Notify({Title = "扫描结果（前 " .. #lines .. " 个｜P=提示键 C=点击）", Content = table.concat(lines, "\n"), Duration = 12})
 end})
 T3:Button({Title = "查看反踢出状态", Callback = function()
 	WindUI:Notify({Title = "反踢出", Content = AK.on and ("已启用，已拦截 " .. AK.blocked .. " 次") or "挂载失败，执行器不支持", Duration = 5})
