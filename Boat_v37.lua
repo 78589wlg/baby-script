@@ -935,6 +935,298 @@ pcall(function()setclipboard(real)end)
 WindUI:Notify({Title="保存路径",Content=real.."（已复制）",Duration=10})
 end})
 
+T2:Section({Title="真实建造（把导出的船用库存方块建出来）"})
+-- 协议来自明文 Block Spawner（ScriptBlox 235807）：
+-- BuildingTool 里的 RF:InvokeServer(方块名, 库存数, 区块, 区块局部CFrame, false, 世界CFrame, false, false)
+-- 方块模型在 ReplicatedStorage.BuildingParts，库存数在 LocalPlayer.Data.<名>.Value
+-- 放好的方块会出现在 workspace.Blocks.<玩家名> 下
+local RS=game:GetService("ReplicatedStorage")
+local building=false
+local matchOrig=true
+local selZone="自动（用我自己的地块）"
+
+local function buildingParts()
+return RS:FindFirstChild("BuildingParts")
+end
+
+local function myStock()
+local out={}
+local bp=buildingParts()
+local data=LP:FindFirstChild("Data")
+if bp and data then
+for _,m in ipairs(bp:GetChildren())do
+local s=data:FindFirstChild(m.Name)
+if s and s.Value>0 and m.PrimaryPart then
+out[#out+1]={name=m.Name,amount=s.Value}
+end
+end
+table.sort(out,function(a,b)return a.amount>b.amount end)
+end
+return out
+end
+
+local function findRF()
+local ch=LP.Character
+local t=ch and ch:FindFirstChild("BuildingTool")
+if not t then
+local bp=LP:FindFirstChildOfClass("Backpack")
+t=bp and bp:FindFirstChild("BuildingTool")
+end
+if not t then return nil end
+local rf=t:FindFirstChild("RF",true)
+if rf and rf:IsA("RemoteFunction") then return rf end
+return nil
+end
+
+local function equipTool()
+local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+if not hum then return false end
+if LP.Character:FindFirstChild("BuildingTool")then return true end
+local bp=LP:FindFirstChildOfClass("Backpack")
+local t=bp and bp:FindFirstChild("BuildingTool")
+if not t then return false end
+pcall(function()hum:EquipTool(t)end)
+for i=1,40 do
+if LP.Character and LP.Character:FindFirstChild("BuildingTool")then return true end
+task.wait(0.05)
+end
+return false
+end
+
+local function pickZone()
+if selZone~="自动（用我自己的地块）"then
+for _,z in ipairs(allZones())do
+if z.Name==selZone then return z end
+end
+end
+local z0=zoneOfPlayer(LP)
+if z0 then
+if z0:IsA("BasePart")then return z0 end
+local p0=z0:FindFirstChildWhichIsA("BasePart",true)
+if p0 then return p0 end
+end
+local hrp=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+local best,bd=nil,math.huge
+for _,zz in ipairs(allZones())do
+local zp=zz:IsA("BasePart")and zz or zz:FindFirstChildWhichIsA("BasePart",true)
+if zp then
+local d=hrp and (hrp.Position-zp.Position).Magnitude or 0
+if d<bd then bd,best=d,zp end
+end
+end
+return best
+end
+
+local function loadBuildData()
+local txt=lastExport
+if selFile and selFile~="（没有文件）"then
+local okr,rd=pcall(function()return readfile("BoatCopy/"..selFile)end)
+if okr and rd then txt=rd end
+end
+if not txt then return nil end
+local okd,d=pcall(function()return HS:JSONDecode(txt)end)
+if okd and type(d)=="table"and d.blocks then return d end
+return nil
+end
+
+-- 界面
+local stock0=myStock()
+local stockNames={}
+for _,e in ipairs(stock0)do stockNames[#stockNames+1]=e.name end
+if #stockNames==0 then stockNames={"（库存为空）"}end
+local selBlock=stockNames[1]
+T2:Dropdown({Title="用什么方块建",Values=stockNames,Value=selBlock,Callback=function(v)selBlock=v end})
+T2:Button({Title="刷新库存",Callback=function()
+local st=myStock()
+local l={}
+for _,e in ipairs(st)do l[#l+1]=e.name.." x"..e.amount end
+if #l==0 then l={"库存为空（先进建造期领方块）"}end
+WindUI:Notify({Title="库存",Content=table.concat(l,"\n"):sub(1,200),Duration=10})
+end})
+T2:Toggle({Title="优先用导出的同名方块（有库存才用）",Value=true,Callback=function(v)
+matchOrig=v
+end})
+local zoneNames={"自动（用我自己的地块）"}
+for _,z in ipairs(allZones())do zoneNames[#zoneNames+1]=z.Name end
+T2:Dropdown({Title="建在哪个地块",Values=zoneNames,Value=selZone,Callback=function(v)selZone=v end})
+T2:Button({Title="刷新地块列表",Callback=function()
+zoneNames={"自动（用我自己的地块）"}
+for _,z in ipairs(allZones())do zoneNames[#zoneNames+1]=z.Name end
+WindUI:Notify({Title="地块",Content="共 "..(#zoneNames-1).." 个，重开脚本后下拉可选",Duration=5})
+end})
+getgenv().BabyBuildScale=getgenv().BabyBuildScale or 1
+T2:Slider({Title="建造缩放%",Value={Min=10,Max=300,Default=100},Callback=function(v)
+getgenv().BabyBuildScale=math.floor(v)/100
+end})
+getgenv().BabyBuildPps=getgenv().BabyBuildPps or 8
+T2:Slider({Title="放置速度（每秒次数）",Value={Min=2,Max=20,Default=8},Callback=function(v)
+getgenv().BabyBuildPps=math.floor(v)
+end})
+T2:Button({Title="按地块大小自动缩放",Callback=function()
+local d=loadBuildData()
+if not d then
+WindUI:Notify({Title="缩放",Content="先导出或选一个文件",Duration=4})
+return
+end
+local zone=pickZone()
+if not zone then
+WindUI:Notify({Title="缩放",Content="找不到地块（要在建造期站在地块里）",Duration=6})
+return
+end
+local span=0
+if d.box and d.box.min and d.box.max then
+span=math.max(d.box.max[1]-d.box.min[1],d.box.max[2]-d.box.min[2],d.box.max[3]-d.box.min[3])
+end
+if span<=0 then
+WindUI:Notify({Title="缩放",Content="算不出船的大小",Duration=4})
+return
+end
+local lim=math.min(zone.Size.X,zone.Size.Z)*0.8
+local s2=lim/span
+if s2>1 then s2=1 end
+if s2<0.1 then s2=0.1 end
+getgenv().BabyBuildScale=s2
+WindUI:Notify({Title="缩放",Content=string.format("船跨度%.0f 地块%.0f，缩放%.0f%%",span,lim,s2*100),Duration=8})
+end})
+
+T2:Toggle({Title="开始真实建造（再点一次=停止）",Value=false,Callback=function(v)
+building=v
+if not v then return end
+task.spawn(function()
+local okAll,errAll=pcall(function()
+local d=loadBuildData()
+if not d then
+WindUI:Notify({Title="建造",Content="没有船数据：先导出一次或选个文件",Duration=6})
+building=false
+return
+end
+local zone=pickZone()
+if not zone then
+WindUI:Notify({Title="建造",Content="找不到地块（要进建造期、站在自己地块上）",Duration=8})
+building=false
+return
+end
+local rf=findRF()
+if not rf then
+if not equipTool() then
+WindUI:Notify({Title="建造",Content="找不到 BuildingTool（背包里没有，进建造期再试）",Duration=8})
+building=false
+return
+end
+rf=findRF()
+if not rf then
+WindUI:Notify({Title="建造",Content="BuildingTool 里没有 RF 接口",Duration=8})
+building=false
+return
+end
+end
+local stock=myStock()
+if #stock==0 then
+WindUI:Notify({Title="建造",Content="库存为空，先领方块",Duration=6})
+building=false
+return
+end
+local stockMap={}
+for _,e in ipairs(stock)do stockMap[e.name]=e.amount end
+local fb=selBlock
+if not stockMap[fb]then fb=stock[1].name end
+local fmodel=buildingParts():FindFirstChild(fb)
+if not(fmodel and fmodel.PrimaryPart)then
+WindUI:Notify({Title="建造",Content=fb.." 在 BuildingParts 里找不到",Duration=6})
+building=false
+return
+end
+local fsize=fmodel.PrimaryPart.Size
+local cx,cy,cz=0,0,0
+local minY=math.huge
+if d.box and d.box.min and d.box.max then
+cx=(d.box.min[1]+d.box.max[1])/2
+cy=(d.box.min[2]+d.box.max[2])/2
+cz=(d.box.min[3]+d.box.max[3])/2
+minY=d.box.min[2]
+else
+local n0=0
+for _,b in ipairs(d.blocks)do
+if b.P then
+cx=cx+b.P[1] cy=cy+b.P[2] cz=cz+b.P[3]
+n0=n0+1
+if b.P[2]<minY then minY=b.P[2] end
+end
+end
+if n0>0 then cx=cx/n0 cy=cy/n0 cz=cz/n0 end
+end
+if minY==math.huge then minY=0 end
+local scale=getgenv().BabyBuildScale or 1
+local baseY=zone.Size.Y/2+fsize.Y/2+0.2
+local dataObj=LP:FindFirstChild("Data")
+local total=#d.blocks
+local sent,okc,failc=0,0,0
+WindUI:Notify({Title="开始建造",Content="用 "..fb.." 建 "..total.." 块｜缩放 "..math.floor(scale*100).."%",Duration=6})
+for bi,b in ipairs(d.blocks)do
+if not building then break end
+if b and b.P and b.S then
+local useName=fb
+if matchOrig and b.N and stockMap[b.N] and stockMap[b.N]>0 and buildingParts():FindFirstChild(b.N)then
+useName=b.N
+end
+local live=dataObj and dataObj:FindFirstChild(useName)
+local amt=live and live.Value or 0
+if amt<=0 then
+useName=fb
+live=dataObj and dataObj:FindFirstChild(useName)
+amt=live and live.Value or 0
+end
+if amt<=0 then
+WindUI:Notify({Title="建造",Content="库存用完了（已发 "..sent.." 块）",Duration=8})
+break
+end
+local m=buildingParts():FindFirstChild(useName)
+if m and m.PrimaryPart then
+local sz=m.PrimaryPart.Size
+local lx=(b.P[1]-cx)*scale
+local ly=baseY+(b.P[2]-minY)*scale
+local lz=(b.P[3]-cz)*scale
+local rot=nil
+if b.X and b.Y and b.Z then
+pcall(function()
+local vx=Vector3.new(b.X[1],b.X[2],b.X[3])
+local vy=Vector3.new(b.Y[1],b.Y[2],b.Y[3])
+rot=CFrame.fromMatrix(Vector3.zero,vx,vy,vx:Cross(vy))
+end)
+end
+local world=zone.CFrame*CFrame.new(lx,ly,lz)*(rot or CFrame.new())
+local args={useName,amt,zone,zone.CFrame:ToObjectSpace(world),false,world,false,false}
+local okp=pcall(function()
+if table.unpack then
+rf:InvokeServer(table.unpack(args))
+else
+rf:InvokeServer(unpack(args))
+end
+end)
+sent=sent+1
+if okp then okc=okc+1 else failc=failc+1 end
+else
+failc=failc+1
+end
+end
+if sent%25==0 then
+WindUI:Notify({Title="建造中",Content=sent.."/"..total.."｜成功 "..okc.."｜失败 "..failc,Duration=2})
+end
+local pps=getgenv().BabyBuildPps or 8
+task.wait(1/pps+math.random()*0.02)
+end
+building=false
+local msg=string.format("发送 %d/%d｜成功 %d｜失败 %d",sent,total,okc,failc)
+pcall(function()setclipboard("建造结果："..msg)end)
+WindUI:Notify({Title="建造结束",Content=msg.."（已复制）",Duration=12})
+end)
+if not okAll then
+building=false
+WindUI:Notify({Title="建造出错",Content=tostring(errAll):sub(1,180),Duration=10})
+end
+end)
+end})
+
 T2:Section({Title="找不到预览时"})
 -- 固定坐标输入（默认 0,20,0 就是地图原点上方）
 getgenv().BabyFixX=getgenv().BabyFixX or 0
