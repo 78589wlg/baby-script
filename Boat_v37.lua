@@ -267,9 +267,9 @@ end
 buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
 local urls={
-"https://raw.githubusercontent.com/federal876887/The-Babft-Archive/main/source/MainModule.lua",
-"https://cdn.jsdelivr.net/gh/federal876887/The-Babft-Archive@main/source/MainModule.lua",
-"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua"
+"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=2",
+"https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BoatCopyMain.lua",
+"https://raw.githubusercontent.com/federal876887/The-Babft-Archive/main/source/MainModule.lua"
 }
 local done=false
 for _,u in ipairs(urls)do
@@ -278,7 +278,7 @@ if okd and src and #src>10000 then
 local okl,err=pcall(function()loadstring(src)()end)
 if okl then
 done=true
-WindUI:Notify({Title="复制船",Content="网上源码已加载（Voltra Build System）",Duration=6})
+WindUI:Notify({Title="复制船",Content="网上源码已加载（Voltra 汉化版）",Duration=6})
 break
 else
 WindUI:Notify({Title="复制船",Content="源码执行出错："..tostring(err):sub(1,120),Duration=10})
