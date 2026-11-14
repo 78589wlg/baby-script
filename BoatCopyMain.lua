@@ -1,10 +1,10 @@
 _G.X = _G.X or {}
 local X = _G.X
 
-X.library = loadstring(game:HttpGet("https://raw.githubusercontent.com/federal876887/The-Babft-Archive/refs/heads/main/server/libtest.lua"))()
-X.listing = loadstring(game:HttpGet("https://raw.githubusercontent.com/federal876887/The-Babft-Archive/refs/heads/main/server/listing.lua"))()
-local NormalColorBlock = loadstring(game:HttpGet("https://raw.githubusercontent.com/federal876887/The-Babft-Archive/refs/heads/main/special/extras/blockcolors.lua"))()
-local LZ4 = loadstring(game:HttpGet("https://raw.githubusercontent.com/federal876887/The-Babft-Archive/refs/heads/main/others/LZ4.lua"))()
+X.library = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatLib.lua?v=1"))()
+X.listing = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatListing.lua?v=1"))()
+local NormalColorBlock = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatColors.lua?v=1"))()
+local LZ4 = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatLZ4.lua?v=1"))()
 print(X.library)
 
 local apikey = "i-know-the-key-is-visible-please-be-kind"
@@ -4257,7 +4257,7 @@ local r, g, b = string.match(UiColor, "(%d+),%s*(%d+),%s*(%d+)")
 local mainColor = Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b))
 
 local window = X.library.new({
-    text = "Voltara Auto Build",
+    text = "Voltra 自动建造",
     size = Vector2.new(360, 538),
     shadow = 0,
     transparency = 0.25,
@@ -4270,7 +4270,7 @@ local window = X.library.new({
 
 window.open()
 
-local mainTab = window.new({ text = "Main" })
+local mainTab = window.new({ text = "主菜单" })
 
 mainTab:show()
 
@@ -4285,7 +4285,7 @@ local nameToPathMap = {}
 local function refreshFiles()
     if not fileDropdown then
         fileDropdown = mainTab.new("dropdown", {
-            text = "Files",
+            text = "文件",
         })
         fileDropdown.event:Connect(function(option)
             selectedFile = nameToPathMap[option]
@@ -4361,7 +4361,7 @@ end
 refreshFiles()
 
 mainTab.new("button", {
-    text = "Refresh Files",
+    text = "刷新文件",
 }).event:Connect(function()
     isManualRefresh = true
     task.spawn(function()
@@ -4371,18 +4371,18 @@ mainTab.new("button", {
 end)
 
 local saveFolder = mainTab.new("folder", {
-    text = "Saving",
+    text = "保存",
 })
 
 saveFolder.new("input", {
-    text = "File Name",
-    placeholder = "Enter File Name",
+    text = "文件名",
+    placeholder = "输入文件名",
 }).event:Connect(function(text)
     saveFileName = text .. ".Build"
 end)
 
 local teamDropdown = saveFolder.new("dropdown", {
-    text = "Team",
+    text = "队伍",
 })
 
 local teamOptions = {}
@@ -4406,7 +4406,7 @@ end)
 teamOptions["My Team"]:Select()
 
 saveFolder.new("button", {
-    text = "Save To File",
+    text = "保存到文件",
 }).event:Connect(function()
     if not saveFileName or not saveTeam then
         warn("Please enter a file name and select a team!")
@@ -4418,19 +4418,19 @@ end)
 saveFolder.open()
 
 local settingsFolder = mainTab.new("folder", {
-    text = "Build Settings",
+    text = "建造设置",
 })
 
 
 
 settingsFolder.new("switch", {
-    text = "Safe Mode",
+    text = "安全模式",
 }).event:Connect(function(state)
     X.Config.safeMode = state
 end)
 
 local speedDropdown = settingsFolder.new("dropdown", {
-    text = "Speed",
+    text = "速度",
 })
 
 local speedOptions = {}
@@ -4468,27 +4468,27 @@ settingsFolder.new("input", {
 end)
 
 local coloredLabel = settingsFolder:new("label", {
-    text = "Auto loading speed recommended, as it is based on",
+    text = "推荐用自动速度，取决于",
     color = Color3.fromRGB(240, 50, 60) 
 })
 local coloredLabel = settingsFolder:new("label", {
-    text = "the current device and server performance. \n ",
+    text = "设备和服务器的性能。 \n ",
     color = Color3.fromRGB(240, 50, 60) 
 })
 settingsFolder.open()
 
 local builderFolder = mainTab.new("folder", {
-    text = "Builder",
+    text = "建造",
 })
 
 builderFolder.new("button", {
-    text = "List Blocks",
+    text = "列出方块",
 }).event:Connect(function()
     X.ListBuild(selectedFile, sizePercent)
 end)
 
 builderFolder.new("button", {
-    text = "Preview",
+    text = "预览",
 }).event:Connect(function()
     if #workspaceChildren(BuildPreview) <= 0 then
         X.PreviewFile(selectedFile, sizePercent)
@@ -4500,7 +4500,7 @@ builderFolder.new("button", {
 end)
 
 builderFolder.new("button", {
-    text = "Load File",
+    text = "加载文件",
 }).event:Connect(function()
     X.LoadFile(selectedFile, sizePercent or 1)
 end)
@@ -4508,33 +4508,33 @@ builderFolder.open()
 
 
 
-local imagesTab = window.new({ text = "Image" })
-local loadersTab = window.new({ text = "Loaders" })
+local imagesTab = window.new({ text = "图片" })
+local loadersTab = window.new({ text = "加载器" })
 
 imagesTab.new("label", {
-    text = "You can Adjust the Image in the Ajusters Tab.",
+    text = "图片可以在「调整」页调节。",
 })
 imagesTab.new("label", {
-    text = "\nResolution:\nHiger = Bad Image Quality + Less Blocks\nLower = Better Image Quallity + More Blocks",
+    text = "\n分辨率：\n调高 = 画质差 + 方块少\n调低 = 画质好 + 方块多",
 })
 imagesTab.new("label", { text = "" })
 
 local mainSettings = imagesTab.new("folder", {
-    text = "Main Settings",
+    text = "主要设置",
 })
 mainSettings.new("input", {
     text = "URL",
-    placeholder = "Image URL",
+    placeholder = "图片链接",
 }).event:Connect(function(url)
     imageUrl = url
 end)
 mainSettings.open()
 
 local imageSettings = imagesTab.new("folder", {
-    text = "Build Settings",
+    text = "建造设置",
 })
 imageSettings.new("input", {
-    text = "Block Size",
+    text = "方块大小",
     placeholder = "0.5",
 }).event:Connect(function(size)
     imageBlockSize = tonumber(size)
@@ -4542,7 +4542,7 @@ imageSettings.new("input", {
 end)
 
 imageSettings.new("input", {
-    text = "Resolution",
+    text = "分辨率",
     placeholder = "5",
 }).event:Connect(function(res)
     resolution = tonumber(res)
@@ -4550,7 +4550,7 @@ imageSettings.new("input", {
 end)
 
 local imageBlockTypeDropdown = imageSettings.new("dropdown", {
-    text = "Block Type",
+    text = "方块类型",
 })
 imageBlockTypeDropdown.event:Connect(function(blockTypeOption)
     imageBlockType = blockTypeOption
@@ -4566,16 +4566,16 @@ end
 imageSettings.open()
 
 local imageBuilder = imagesTab.new("folder", {
-    text = "Builder",
+    text = "建造",
 })
 imageBuilder.new("button", {
-    text = "List Blocks",
+    text = "列出方块",
 }).event:Connect(function()
     X.ListImageBlocks()
 end)
 
 imageBuilder.new("button", {
-    text = "Preview",
+    text = "预览",
 }).event:Connect(function()
     if #workspaceChildren(BuildPreview) > 0 then
         X.ClearPreview(true)
@@ -4587,7 +4587,7 @@ imageBuilder.new("button", {
 end)
 
 imageBuilder.new("button", {
-    text = "Load Image",
+    text = "加载图片",
 }).event:Connect(function()
     X.ProcessImage(imageUrl, imageBlockType, imageBlockSize, resolution, false)
 end)
@@ -4599,7 +4599,7 @@ loadersTab.new("label", {
 })
 
 loadersTab.new("label", {
-    text = "Warning: Loader are still under Development, \nthere are maybe some Bugs.\nYou can Adjust the Preview in the Ajusters Tab. \n ",
+    text = "警告：加载器还在开发中，可能有 Bug。\n预览可以在「调整」页调节。 \n ",
 })
 
 loadersTab.new("label", {
@@ -4607,15 +4607,15 @@ loadersTab.new("label", {
 })
 
 local shapesFolder = loadersTab.new("folder", {
-    text = "Shape Loader",
+    text = "形状加载器",
 })
 
 local shapeSettingsFolder = shapesFolder.new("folder", {
-    text = "Shape Settings",
+    text = "形状设置",
 })
 
 local shapeTypeDropdown = shapeSettingsFolder.new("dropdown", {
-    text = "Shape Type",
+    text = "形状类型",
 })
     shapeTypeDropdown.new("Circle")
     shapeTypeDropdown.new("Ball")
@@ -4628,7 +4628,7 @@ shapeTypeDropdown.event:Connect(function(option)
 end)
 
 local shapeBlockTypeDropdown = shapeSettingsFolder.new("dropdown", {
-    text = "Block Type",
+    text = "方块类型",
 })
 shapeBlockTypeDropdown.event:Connect(function(option)
     blockType = option
@@ -4644,39 +4644,39 @@ end
 shapeSettingsFolder.open()
 
 local shapeDimensionsFolder = shapesFolder.new("folder", {
-    text = "Dimensions",
+    text = "尺寸",
 })
 
 shapeDimensionsFolder.new("input", {
-    text = "Radius/Size",
+    text = "半径/大小",
     placeholder = "5",
 }).event:Connect(function(value)
     radius = tonumber(value) or 5
 end)
 
 shapeDimensionsFolder.new("input", {
-    text = "Width",
+    text = "宽",
     placeholder = "10",
 }).event:Connect(function(value)
     shapeWidth = tonumber(value) or 10
 end)
 
 shapeDimensionsFolder.new("input", {
-    text = "Height",
+    text = "高",
     placeholder = "10",
 }).event:Connect(function(value)
     shapeHeight = tonumber(value) or 10
 end)
 
 shapeDimensionsFolder.new("input", {
-    text = "Depth",
+    text = "深",
     placeholder = "10",
 }).event:Connect(function(value)
     shapeDepth = tonumber(value) or 10
 end)
 
 shapeDimensionsFolder.new("input", {
-    text = "Thickness",
+    text = "厚度",
     placeholder = "1",
 }).event:Connect(function(value)
     thickness = tonumber(value) or 1
@@ -4685,18 +4685,18 @@ end)
 shapeDimensionsFolder.open()
 
 local shapeOptionsFolder = shapesFolder.new("folder", {
-    text = "Options",
+    text = "选项",
 })
 
 shapeOptionsFolder.new("input", {
-    text = "Block Spacing",
+    text = "方块间距",
     placeholder = "2",
 }).event:Connect(function(value)
     blockSpacing = math.max(1, tonumber(value) or 2)
 end)
 
 shapeOptionsFolder.new("switch", {
-    text = "Center on Plot",
+    text = "对齐地块中心",
 }).event:Connect(function(state)
     centerOnPlot = state
 end)
@@ -4759,7 +4759,7 @@ local function listShapeBlocks()
 end
 
 local previewButton = shapesFolder.new("button", {
-    text = "Preview Shape",
+    text = "预览形状",
 })
 
 previewButton.event:Connect(function()
@@ -4773,32 +4773,32 @@ previewButton.event:Connect(function()
 end)
 
 shapesFolder.new("button", {
-    text = "Build Shape",
+    text = "建造形状",
 }).event:Connect(function()
     X.BuildFromPreview({ previewFn = X.PreviewShape })
 end)
 
 shapesFolder.new("button", {
-    text = "List Blocks",
+    text = "列出方块",
 }).event:Connect(listShapeBlocks)
 
 local textFolder = loadersTab.new("folder", {
-    text = "Text Loader",
+    text = "文字加载器",
 })
 
 local textSettingsFolder = textFolder.new("folder", {
-    text = "Text Settings",
+    text = "文字设置",
 })
 
 textSettingsFolder.new("input", {
-    text = "Text Content",
+    text = "文字内容",
     placeholder = X.TextSettings.Content,
 }).event:Connect(function(text)
     X.UpdateTextSetting("Content", text)
 end)
 
 local textBlockTypeDropdown = textSettingsFolder.new("dropdown", {
-    text = "Block Type",
+    text = "方块类型",
 })
 for _, part in next, workspaceChildren(BuildingParts), nil do
     local name = part.Name
@@ -4813,11 +4813,11 @@ end)
 textSettingsFolder.open()
 
 local textDimensionsFolder = textFolder.new("folder", {
-    text = "Dimensions",
+    text = "尺寸",
 })
 
 textDimensionsFolder.new("input", {
-    text = "Block Size",
+    text = "方块大小",
     placeholder = tostring(X.TextSettings.BlockSize),
 }).event:Connect(function(size)
     local val = tonumber(size)
@@ -4827,7 +4827,7 @@ textDimensionsFolder.new("input", {
 end)
 
 textDimensionsFolder.new("input", {
-    text = "Scale",
+    text = "缩放",
     placeholder = tostring(X.TextSettings.Scale),
 }).event:Connect(function(scale)
     local val = tonumber(scale)
@@ -4837,11 +4837,11 @@ textDimensionsFolder.new("input", {
 end)
 
 local textOptionsFolder = textFolder.new("folder", {
-    text = "Options",
+    text = "选项",
 })
 
 textOptionsFolder.new("input", {
-    text = "Letter Spacing",
+    text = "字间距",
     placeholder = tostring(X.TextSettings.LetterSpacing),
 }).event:Connect(function(spacing)
     local val = tonumber(spacing)
@@ -4851,7 +4851,7 @@ textOptionsFolder.new("input", {
 end)
 
 textOptionsFolder.new("input", {
-    text = "Word Spacing",
+    text = "词间距",
     placeholder = tostring(X.TextSettings.WordSpacing),
 }).event:Connect(function(spacing)
     local val = tonumber(spacing)
@@ -4864,22 +4864,22 @@ textDimensionsFolder.open()
 textOptionsFolder.open()
 
 textFolder.new("button", {
-    text = "Preview Text",
+    text = "预览文字",
 }).event:Connect(X.GenerateTextPreview)
 
 textFolder.new("button", {
-    text = "Clear Preview Text",
+    text = "清除文字预览",
 }).event:Connect(function()
     X.ClearPreview()
     X.listing:Clear()
 end)
 
 textFolder.new("button", {
-    text = "List Blocks",
+    text = "列出方块",
 }).event:Connect(X.ListTextBlocks)
 
 textFolder.new("button", {
-    text = "Load Text",
+    text = "加载文字",
 }).event:Connect(function()
     X.BuildFromPreview({ previewFn = X.GenerateTextPreview, clearAfter = true })
 end)
@@ -4887,11 +4887,11 @@ end)
 
 
 local terrainFolder = loadersTab.new("folder", {
-    text = "Terrain Loader",
+    text = "地形加载器",
 })
 
 terrainFolder.new("label", {
-    text = "Terrain Loader Update Soon",
+    text = "地形加载器即将更新",
 })
 
 local terrainSettings = {
@@ -4910,11 +4910,11 @@ local terrainSettings = {
 }
 
 local terrainSettingsFolder = terrainFolder.new("folder", {
-    text = "Terrain Settings",
+    text = "地形设置",
 })
 
 local terrainTypeDropdown = terrainSettingsFolder.new("dropdown", {
-    text = "Terrain Type",
+    text = "地形类型",
 })
 terrainTypeDropdown.new("Mountain")
 terrainTypeDropdown.new("Hill")
@@ -4929,7 +4929,7 @@ terrainTypeDropdown.event:Connect(function(option)
 end)
 
 local terrainBlockTypeDropdown = terrainSettingsFolder.new("dropdown", {
-    text = "Block Type",
+    text = "方块类型",
 })
 terrainBlockTypeDropdown.event:Connect(function(option)
     terrainSettings.BlockType = option
@@ -4945,25 +4945,25 @@ end
 terrainSettingsFolder.open()
 
 local terrainDimensionsFolder = terrainFolder.new("folder", {
-    text = "Dimensions",
+    text = "尺寸",
 })
 
 terrainDimensionsFolder.new("input", {
-    text = "Width",
+    text = "宽",
     placeholder = tostring(terrainSettings.Width),
 }).event:Connect(function(value)
     terrainSettings.Width = math.max(1, tonumber(value) or terrainSettings.Width)
 end)
 
 terrainDimensionsFolder.new("input", {
-    text = "Height",
+    text = "高",
     placeholder = tostring(terrainSettings.Height),
 }).event:Connect(function(value)
     terrainSettings.Height = math.max(1, tonumber(value) or terrainSettings.Height)
 end)
 
 terrainDimensionsFolder.new("input", {
-    text = "Depth",
+    text = "深",
     placeholder = tostring(terrainSettings.Depth),
 }).event:Connect(function(value)
     terrainSettings.Depth = math.max(1, tonumber(value) or terrainSettings.Depth)
@@ -4972,18 +4972,18 @@ end)
 terrainDimensionsFolder.open()
 
 local terrainOptionsFolder = terrainFolder.new("folder", {
-    text = "Options",
+    text = "选项",
 })
 
 terrainOptionsFolder.new("input", {
-    text = "Roughness",
+    text = "粗糙度",
     placeholder = tostring(terrainSettings.Roughness),
 }).event:Connect(function(value)
     terrainSettings.Roughness = math.max(0.1, math.min(1, tonumber(value) or terrainSettings.Roughness))
 end)
 
 terrainOptionsFolder.new("input", {
-    text = "Detail Density (0-1)",
+    text = "细节密度 (0-1)",
     placeholder = "0.4",
 }).event:Connect(function(value)
     terrainSettings.DetailDensity = math.max(0, math.min(1, tonumber(value) or 0.4))
@@ -4997,7 +4997,7 @@ terrainOptionsFolder.new("switch", {
 end)
 
 terrainOptionsFolder.new("switch", {
-    text = "Smooth Edges & Corners",
+    text = "平滑边角",
     value = true,
 }).event:Connect(function(state)
     terrainSettings.EdgeSmoothing = state
@@ -5502,7 +5502,7 @@ local function listTerrainBlocks()
 end
 
 local previewButton = terrainFolder.new("button", {
-    text = "Preview Terrain",
+    text = "预览地形",
 })
 
 previewButton.event:Connect(function()
@@ -5515,11 +5515,11 @@ previewButton.event:Connect(function()
 end)
 
 terrainFolder.new("button", {
-    text = "List Blocks",
+    text = "列出方块",
 }).event:Connect(listTerrainBlocks)
 
 terrainFolder.new("button", {
-    text = "Build Terrain",
+    text = "建造地形",
 }).event:Connect(function()
     X.BuildFromPreview({ previewFn = generateTerrainPreview })
 end)
@@ -5537,28 +5537,28 @@ end)
 
 
 local qrTab = loadersTab.new("folder", {
-    text = "QR Code Loader",
+    text = "二维码加载器",
 })
 
 qrTab.new("label", {
-    text = "Currently Supporting Text and Links.",
+    text = "目前支持文字和链接。",
 })
 
 local qrContent = nil
 local qrBlockSize = 2
 
 local qrMainSettings = qrTab.new("folder", {
-    text = "Main Settings",
+    text = "主要设置",
 })
 qrMainSettings.new("input", {
-    text = "QR Content",
-    placeholder = "Enter text or URL",
+    text = "二维码内容",
+    placeholder = "输入文字或链接",
 }).event:Connect(function(text)
     qrContent = text
 end)
 
 qrMainSettings.new("input", {
-    text = "Block Size",
+    text = "方块大小",
     placeholder = "2",
 }).event:Connect(function(size)
     qrBlockSize = math.max(0.5, tonumber(size) or 2)
@@ -5567,7 +5567,7 @@ end)
 qrMainSettings.open()
 
 local qrBuilder = qrTab.new("folder", {
-    text = "Builder",
+    text = "建造",
 })
 
 local function generateQRPreview()
@@ -5667,7 +5667,7 @@ local function generateQRPreview()
 end
 
 qrBuilder.new("button", {
-    text = "Preview",
+    text = "预览",
 }).event:Connect(function()
     if #workspaceChildren(BuildPreview) > 0 then
         X.ClearPreview(true)
@@ -5724,7 +5724,7 @@ local function listQRBlocks()
 end
 
 qrBuilder.new("button", {
-    text = "List Blocks",
+    text = "列出方块",
 }).event:Connect(listQRBlocks)
 
 local function buildQRCode()
@@ -5764,7 +5764,7 @@ local function buildQRCode()
 end
 
 qrBuilder.new("button", {
-    text = "Load QR",
+    text = "加载二维码",
 }).event:Connect(buildQRCode)
 qrBuilder.open()
 
@@ -6151,10 +6151,10 @@ end
 
 -- ==================== 3D Models Tab UI ====================
 
-local objTab = window.new({ text = "3D Models" })
+local objTab = window.new({ text = "3D 模型" })
 
 objTab.new("label", {
-    text = " \n3D Loader using a Outdated Sever,\nalso extrem Quality is unavailable for first Alpha.",
+    text = " \n3D 加载器用的是旧版服务器，\n极高画质暂不支持（内测阶段）。",
 })
 
 objTab.new("label", {
@@ -6162,7 +6162,7 @@ objTab.new("label", {
 })
 
 local objFileDropdown = objTab.new("dropdown", {
-    text = "Select .OBJ File",
+    text = "选择 .OBJ 文件",
 })
 
 local objDropdownItems = {}
@@ -6219,15 +6219,15 @@ objFileDropdown.event:Connect(function(selectedName)
 end)
 
 objTab.new("button", {
-    text = "Refresh File List",
+    text = "刷新文件列表",
 }).event:Connect(refreshOBJFiles)
 
 local objSettingsFolder = objTab.new("folder", {
-    text = "Settings",
+    text = "设置",
 })
 
 local objQualityDropdown = objSettingsFolder.new("dropdown", {
-    text = "Quality Level",
+    text = "质量等级",
 })
 
 objQualityDropdown.new("LOW")
@@ -6245,7 +6245,7 @@ objQualityDropdown.event:Connect(function(option)
 end)
 
 local objBlockDropdown = objSettingsFolder.new("dropdown", {
-    text = "Block Type",
+    text = "方块类型",
 })
 
 for _, part in next, workspaceChildren(BuildingParts), nil do
@@ -6260,28 +6260,28 @@ objBlockDropdown.event:Connect(function(option)
 end)
 
 objSettingsFolder.new("input", {
-    text = "Model Scale",
+    text = "模型缩放",
     placeholder = "1.0",
 }).event:Connect(function(value)
     objSettings.Scale = tonumber(value) or 1.0
 end)
 
 objSettingsFolder.new("switch", {
-    text = "Fill Interior (solid model)",
+    text = "填充内部（实心模型）",
     value = false,
 }).event:Connect(function(state)
     objSettings.FillInterior = state
 end)
 
 objSettingsFolder.new("switch", {
-    text = "Smooth Rotation (surface align)",
+    text = "平滑旋转（表面对齐）",
     value = false,
 }).event:Connect(function(state)
     objSettings.SmoothRotation = state
 end)
 
 local objGapDropdown = objSettingsFolder.new("dropdown", {
-    text = "Gap Closing (thin parts)",
+    text = "缝隙闭合（薄部件）",
 })
 objGapDropdown.new("None (0)")
 objGapDropdown.new("Light (1) - recommended")
@@ -6299,78 +6299,78 @@ end)
 objSettingsFolder.open()
 
 local objControlFolder = objTab.new("folder", {
-    text = "Controls",
+    text = "控制",
 })
 objControlFolder.open()
 
 objControlFolder.new("button", {
-    text = "Preview Model",
+    text = "预览模型",
 }).event:Connect(X.PreviewOBJModel)
 
 objControlFolder.new("button", {
-    text = "Count Required Blocks",
+    text = "统计所需方块",
 }).event:Connect(X.CountOBJBlocks)
 
 objControlFolder.new("button", {
-    text = "Build Model",
+    text = "建造模型",
 }).event:Connect(X.BuildOBJModel)
 
 objControlFolder.new("button", {
-    text = "Clear Preview",
+    text = "清除预览",
 }).event:Connect(X.ClearOBJPreview)
 
 
-local adjustersTab = window.new({ text = "Adjusters" })
+local adjustersTab = window.new({ text = "调整" })
 
 local positionFolder = adjustersTab.new("folder", {
-    text = "Position Offset",
+    text = "位置偏移",
 })
 positionFolder.new("input", {
-    text = "Move Multiplier",
+    text = "移动倍率",
     placeholder = "1",
 }).event:Connect(function(value)
     moveMultiplier = tonumber(value) or 1
 end)
 
 positionFolder.new("button", {
-    text = "Move Up",
+    text = "上移",
 }).event:Connect(function()
     X.UpdatePreview(Vector3_new(0, moveMultiplier, 0))
 end)
 
 positionFolder.new("button", {
-    text = "Move Down",
+    text = "下移",
 }).event:Connect(function()
     X.UpdatePreview(Vector3_new(0, -moveMultiplier, 0))
 end)
 
 positionFolder.new("button", {
-    text = "Move Left",
+    text = "左移",
 }).event:Connect(function()
     X.UpdatePreview(Vector3_new(moveMultiplier, 0, 0))
 end)
 
 positionFolder.new("button", {
-    text = "Move Right",
+    text = "右移",
 }).event:Connect(function()
     X.UpdatePreview(Vector3_new(-moveMultiplier, 0, 0))
 end)
 
 positionFolder.new("button", {
-    text = "Move Forwards",
+    text = "前移",
 }).event:Connect(function()
     X.UpdatePreview(Vector3_new(0, 0, moveMultiplier))
 end)
 
 positionFolder.new("button", {
-    text = "Move Backwards",
+    text = "后移",
 }).event:Connect(function()
     X.UpdatePreview(Vector3_new(0, 0, -moveMultiplier))
 end)
 positionFolder.open()
 
 local rotationFolder = adjustersTab.new("folder", {
-    text = "Rotation Offset",
+    text = "旋转偏移",
 })
 local rotXSlider = rotationFolder.new("slider", {
     text = "X",
@@ -6407,10 +6407,10 @@ end)
 rotationFolder.open()
 
 local otherFolder = adjustersTab.new("folder", {
-    text = "Other",
+    text = "其他",
 })
 otherFolder.new("input", {
-    text = "Size %",
+    text = "大小 %",
     placeholder = "100",
 }).event:Connect(function(value)
     X.ClearPreview()
@@ -6418,11 +6418,11 @@ otherFolder.new("input", {
 end)
 
 otherFolder.new("button", {
-    text = "Mirror Build",
+    text = "镜像建造",
 }).event:Connect(X.MirrorBuild)
 
 otherFolder.new("button", {
-    text = "Ground Build",
+    text = "落地建造",
 }).event:Connect(function()
     local previewBlocks = BuildPreview:GetChildren()
     if #previewBlocks == 0 then
@@ -6454,7 +6454,7 @@ otherFolder.new("button", {
 end)
 
 otherFolder.new("button", {
-    text = "Center Build",
+    text = "居中建造",
 }).event:Connect(function()
     local previewBlocks = BuildPreview:GetChildren()
     if #previewBlocks == 0 then
