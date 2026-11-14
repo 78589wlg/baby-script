@@ -1062,6 +1062,10 @@ getgenv().BabyBuildPps=getgenv().BabyBuildPps or 8
 T2:Slider({Title="放置速度（每秒次数）",Value={Min=2,Max=20,Default=8},Callback=function(v)
 getgenv().BabyBuildPps=math.floor(v)
 end})
+if getgenv().BabyBuildSnap==nil then getgenv().BabyBuildSnap=true end
+T2:Toggle({Title="网格对齐（方块拼接防散架，建议开）",Value=getgenv().BabyBuildSnap,Callback=function(v)
+getgenv().BabyBuildSnap=v
+end})
 T2:Button({Title="按地块大小自动缩放",Callback=function()
 local d=loadBuildData()
 if not d then
@@ -1157,12 +1161,27 @@ if n0>0 then cx=cx/n0 cy=cy/n0 cz=cz/n0 end
 end
 if minY==math.huge then minY=0 end
 local scale=getgenv().BabyBuildScale or 1
-local baseY=zone.Size.Y/2+fsize.Y/2+0.2
+-- 地面高度：优先从角色脚下打射线取真实地面（地块 Part 可能是个大柱子，上表面在半空，直接用会放天上）
+local groundY=nil
+do
+local hrp=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+if hrp then
+local rp=RaycastParams.new()
+rp.FilterType=Enum.RaycastFilterType.Exclude
+rp.FilterDescendantsInstances={LP.Character}
+local hit=workspace:Raycast(hrp.Position+Vector3.new(0,3,0),Vector3.new(0,-60,0),rp)
+if hit then groundY=hit.Position.Y end
+end
+if not groundY then groundY=zone.Position.Y+zone.Size.Y/2 end
+end
 local dataObj=LP:FindFirstChild("Data")
 local total=#d.blocks
+-- 从低到高逐层放：下层先落地拼住，上层叠在上面才不会掉
+local blist=d.blocks
+pcall(function()table.sort(blist,function(a,b)return (a.P and a.P[2] or 0)<(b.P and b.P[2] or 0)end)end)
 local sent,okc,failc=0,0,0
-WindUI:Notify({Title="开始建造",Content="用 "..fb.." 建 "..total.." 块｜缩放 "..math.floor(scale*100).."%",Duration=6})
-for bi,b in ipairs(d.blocks)do
+WindUI:Notify({Title="开始建造",Content="用 "..fb.." 建 "..total.." 块｜缩放 "..math.floor(scale*100).."%｜地面Y "..math.floor(groundY),Duration=6})
+for bi,b in ipairs(blist)do
 if not building then break end
 if b and b.P and b.S then
 local useName=fb
@@ -1183,9 +1202,16 @@ end
 local m=buildingParts():FindFirstChild(useName)
 if m and m.PrimaryPart then
 local sz=m.PrimaryPart.Size
-local lx=(b.P[1]-cx)*scale
-local ly=baseY+(b.P[2]-minY)*scale
-local lz=(b.P[3]-cz)*scale
+local wx=zone.Position.X+(b.P[1]-cx)*scale
+local wy=groundY+sz.Y/2+0.05+(b.P[2]-minY)*scale
+local wz=zone.Position.Z+(b.P[3]-cz)*scale
+-- 网格对齐：XZ 按方块尺寸吸附，相邻块拼在一起，服务器会自动焊接，不会散掉
+if getgenv().BabyBuildSnap then
+local stX=math.max(sz.X*scale,0.1)
+local stZ=math.max(sz.Z*scale,0.1)
+wx=math.floor(wx/stX+0.5)*stX
+wz=math.floor(wz/stZ+0.5)*stZ
+end
 local rot=nil
 if b.X and b.Y and b.Z then
 pcall(function()
@@ -1194,7 +1220,7 @@ local vy=Vector3.new(b.Y[1],b.Y[2],b.Y[3])
 rot=CFrame.fromMatrix(Vector3.zero,vx,vy,vx:Cross(vy))
 end)
 end
-local world=zone.CFrame*CFrame.new(lx,ly,lz)*(rot or CFrame.new())
+local world=CFrame.new(wx,wy,wz)*(rot or CFrame.new())
 local args={useName,amt,zone,zone.CFrame:ToObjectSpace(world),false,world,false,false}
 local okp=pcall(function()
 if table.unpack then
