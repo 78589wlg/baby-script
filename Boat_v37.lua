@@ -1066,6 +1066,58 @@ if getgenv().BabyBuildSnap==nil then getgenv().BabyBuildSnap=true end
 T2:Toggle({Title="网格对齐（方块拼接防散架，建议开）",Value=getgenv().BabyBuildSnap,Callback=function(v)
 getgenv().BabyBuildSnap=v
 end})
+-- ===== 参数学习：拦截游戏自己放方块时的真实调用 =====
+-- 接口 8 个参数里第 5/7/8 个 false 的含义不明，很可能其中一个控制焊接/锚定。
+-- 开着这个开关、自己手动放一块方块，脚本会把真实参数抓下来存住，建造时自动套用。
+getgenv().BabyBoatLearned=getgenv().BabyBoatLearned or nil
+T2:Toggle({Title="参数学习（开着它，自己手动放一块方块）",Value=false,Callback=function(v)
+if not v then return end
+local rf=findRF()
+if not rf then
+WindUI:Notify({Title="参数学习",Content="先装备 BuildingTool 再开",Duration=6})
+return
+end
+if getgenv().BabyBoatHooked then
+WindUI:Notify({Title="参数学习",Content="已经在监听了，去手动放一块",Duration=5})
+return
+end
+if not hookfunction then
+WindUI:Notify({Title="参数学习",Content="执行器不支持 hookfunction",Duration=6})
+return
+end
+local tof=typeof or type
+local old
+old=hookfunction(rf.InvokeServer,function(...)
+local args={...}
+if args[1]==rf and #args>=5 then
+local lines={}
+for i=2,#args do
+local a=args[i]
+lines[#lines+1]=i..": "..tostring(tof(a)).." = "..tostring(a):sub(1,60)
+end
+getgenv().BabyBoatLearned={n=#args,e5=args[5],e7=args[7],e8=args[8],e2=args[2],raw=args}
+local txt="参数5="..tostring(args[5]).." 参数7="..tostring(args[7]).." 参数8="..tostring(args[8])
+pcall(function()setclipboard(txt)end)
+WindUI:Notify({Title="抓到了！",Content=txt.."（详情已复制）",Duration=15})
+end
+return old(...)
+end)
+getgenv().BabyBoatHooked=true
+WindUI:Notify({Title="参数学习",Content="监听已开启：自己手动放一块方块",Duration=8})
+end})
+T2:Button({Title="查看已学到的参数",Callback=function()
+local L=getgenv().BabyBoatLearned
+if not L then
+WindUI:Notify({Title="参数",Content="还没抓到过，先开参数学习再手动放一块",Duration=6})
+return
+end
+WindUI:Notify({Title="已学到的参数",Content="参数5="..tostring(L.e5).."｜参数7="..tostring(L.e7).."｜参数8="..tostring(L.e8),Duration=12})
+end})
+-- 实验模式：手动指定第5/7/8参数（学到参数后一般不用管）
+if getgenv().BabyBuildArgsMode==nil then getgenv().BabyBuildArgsMode="自动（学到就用学到的）" end
+T2:Dropdown({Title="第5/7/8参数（放不住就换着试）",Values={"自动（学到就用学到的）","全 false","第5=true","第7=true","第8=true"},Value=getgenv().BabyBuildArgsMode,Callback=function(v)
+getgenv().BabyBuildArgsMode=v
+end})
 T2:Button({Title="按地块大小自动缩放",Callback=function()
 local d=loadBuildData()
 if not d then
@@ -1221,7 +1273,18 @@ rot=CFrame.fromMatrix(Vector3.zero,vx,vy,vx:Cross(vy))
 end)
 end
 local world=CFrame.new(wx,wy,wz)*(rot or CFrame.new())
-local args={useName,amt,zone,zone.CFrame:ToObjectSpace(world),false,world,false,false}
+local a5,a7,a8=false,false,false
+local L=getgenv().BabyBoatLearned
+local md=getgenv().BabyBuildArgsMode or "自动（学到就用学到的）"
+if md=="第5=true"then a5=true
+elseif md=="第7=true"then a7=true
+elseif md=="第8=true"then a8=true
+elseif md=="自动（学到就用学到的）"and L then
+a5=(L.e5==true)
+a7=(L.e7==true)
+a8=(L.e8==true)
+end
+local args={useName,amt,zone,zone.CFrame:ToObjectSpace(world),a5,world,a7,a8}
 local okp=pcall(function()
 if table.unpack then
 rf:InvokeServer(table.unpack(args))
