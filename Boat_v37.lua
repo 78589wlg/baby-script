@@ -267,7 +267,7 @@ end
 buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
 local urls={
-"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=2",
+"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=3",
 "https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BoatCopyMain.lua",
 "https://raw.githubusercontent.com/federal876887/The-Babft-Archive/main/source/MainModule.lua"
 }
