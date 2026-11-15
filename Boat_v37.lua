@@ -355,6 +355,78 @@ WindUI:Notify({Title="删除所有文件",Content=ok and ("已删除 "..n.." 个
 end})
 
 -- 每个功能单独一个按钮，点了才渲染（核心下载后控件只排队，不上屏）
+-- ===== 框选删除：两个角定一个范围，删掉框内自己的所有方块 =====
+local boxC1, boxC2=nil, nil
+local function getBlockFolder()
+local f=workspace:FindFirstChild("Blocks")
+if not f then return nil end
+local mine=f:FindFirstChild(LP.Name)
+if mine then return mine end
+-- 共享模式：方块在队长名下
+local ok,tl=pcall(function()
+return game:GetService("Teams"):FindFirstChild(LP.Team.Name).TeamLeader.Value
+end)
+if ok and tl then return f:FindFirstChild(tl) end
+return nil
+end
+local function getDeleteRF()
+local ch=LP.Character
+local t=ch and ch:FindFirstChild("DeleteTool") or LP.Backpack:FindFirstChild("DeleteTool")
+return t and t:FindFirstChild("RF") or nil
+end
+local function setCorner(which)
+local ch=LP.Character
+local hrp=ch and ch:FindFirstChild("HumanoidRootPart")
+if not hrp then
+WindUI:Notify({Title="框选删除",Content="没找到角色，重生后再试",Duration=5})
+return
+end
+local pos=hrp.Position
+if which==1 then boxC1=pos else boxC2=pos end
+WindUI:Notify({Title="框选删除",Content="第 "..which.." 个角已定在脚下位置",Duration=4})
+end
+T2:Section({Title="框选删除（站在两个角各点一次，再点删除）"})
+T2:Button({Title="框选删除 · 定第1个角（站到范围一角再点）",Callback=function()
+setCorner(1)
+end})
+T2:Button({Title="框选删除 · 定第2个角（站到对面角再点）",Callback=function()
+setCorner(2)
+end})
+T2:Button({Title="框选删除 · 删除框内所有方块（不可恢复）",Callback=function()
+if not(boxC1 and boxC2) then
+WindUI:Notify({Title="框选删除",Content="先把两个角都定好",Duration=5})
+return
+end
+task.spawn(function()
+local folder=getBlockFolder()
+if not folder then
+WindUI:Notify({Title="框选删除",Content="找不到你的方块文件夹",Duration=6})
+return
+end
+local rf=getDeleteRF()
+if not rf then
+WindUI:Notify({Title="框选删除",Content="背包里没有删除工具",Duration=6})
+return
+end
+local mn=Vector3.new(math.min(boxC1.X,boxC2.X)-3,math.min(boxC1.Y,boxC2.Y)-3,math.min(boxC1.Z,boxC2.Z)-3)
+local mx=Vector3.new(math.max(boxC1.X,boxC2.X)+3,math.max(boxC1.Y,boxC2.Y)+3,math.max(boxC1.Z,boxC2.Z)+3)
+local n=0
+for _,b in ipairs(folder:GetChildren())do
+local pp=b:FindFirstChild("PPart") or b.PrimaryPart or b:FindFirstChildWhichIsA("BasePart")
+if pp then
+local p=pp.Position
+if p.X>=mn.X and p.X<=mx.X and p.Y>=mn.Y and p.Y<=mx.Y and p.Z>=mn.Z and p.Z<=mx.Z then
+task.spawn(function() pcall(function() rf:InvokeServer(b) end) end)
+n=n+1
+if n%10==0 then task.wait() end
+end
+end
+end
+task.wait(1)
+WindUI:Notify({Title="框选删除",Content="已请求删除框内 "..n.." 个方块",Duration=7})
+end)
+end})
+
 T2:Section({Title="复制船功能（先点 1 下载核心，再点要用的功能）"})
 T2:Button({Title="1. 点我下载复制船核心",Callback=function()
 copyBuilt=true
