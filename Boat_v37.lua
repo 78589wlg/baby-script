@@ -268,7 +268,7 @@ buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
 getgenv().BabyVoltraHostTab=T2  -- Voltra 界面嵌入「复制船」页
 local urls={
-"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=6",
+"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=7",
 "https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua"
 }
 local done=false
@@ -339,6 +339,19 @@ end})
 T2:Button({Title="立刻拿出所有工具",Callback=function()
 local n=equipAllTools()
 WindUI:Notify({Title="多工具",Content="已拿出 "..n.." 个工具",Duration=5})
+end})
+
+T2:Button({Title="删除所有保存的船文件（不可恢复）",Callback=function()
+local n=0
+local ok,files=pcall(listfiles,"VoltaraBuildStorage")
+if ok and files then
+for _,f in ipairs(files)do
+if f:sub(-6)==".Build" or f:sub(-7)==".vBuild" then
+if pcall(delfile,f) then n=n+1 end
+end
+end
+end
+WindUI:Notify({Title="删除所有文件",Content=ok and ("已删除 "..n.." 个存档文件") or ("执行器不支持文件操作或没有存档"),Duration=7})
 end})
 
 -- 每个功能单独一个按钮，点了才渲染（核心下载后控件只排队，不上屏）
