@@ -254,8 +254,8 @@ pcall(function()if delfile then delfile(KEYFILE)end end)
 unlocked=false
 WindUI:Notify({Title="卡密",Content="已清除，复制功能已锁定（重开脚本生效）",Duration=6})
 end})
--- ===== 复制别人的船 =====
-local T2=Win:Tab({Title="复制船",Icon="copy"})
+-- ===== 复制别人的船（并入「刷钱」页，不再单开页签） =====
+local T2=T1  -- 复制船内容直接渲染在刷钱页下方
 
 local copyBuilt=false
 buildCopyOnce=function()
@@ -266,6 +266,7 @@ end
 
 buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
+T2:Section({Title="── 复制船（下面的按钮都在本页）──"})
 local urls={
 "https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=3",
 "https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BoatCopyMain.lua",
