@@ -102,6 +102,10 @@ function library.new(cfg)
 					return tab.new(k2, o2)
 				end
 				folder.event = newSignal()
+				-- Voltra 会调用 folder.open()（点调用，展开分组）；WindUI 里内容常显，空操作即可
+				folder.open = function() end
+				folder.close = function() end
+				folder.toggle = function() end
 				function folder:Destroy() end
 				return folder
 			end
@@ -191,6 +195,12 @@ function library.new(cfg)
 					local dummy = Instance.new("Folder")
 					dummy.Name = "VoltraOpt_" .. tostring(name)
 					opt.object = dummy
+					-- Voltra 用 opt:Select() 设置默认选中（如队伍 "My Team"、速度 "Auto"），
+					-- 必须同步触发 dropdown 的 event，否则对应变量是空，保存等功能失效
+					function opt:Select()
+						if wd and wd.Select then pcall(function() wd:Select(tostring(name)) end) end
+						el.event:Fire(tostring(name))
+					end
 					function opt:Destroy()
 						for i, v in ipairs(el.values) do
 							if v == tostring(name) then table.remove(el.values, i) break end
