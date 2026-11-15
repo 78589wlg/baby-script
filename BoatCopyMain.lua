@@ -1,7 +1,7 @@
 _G.X = _G.X or {}
 local X = _G.X
 
-X.library = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatLib.lua?v=5"))()
+X.library = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatLib.lua?v=6"))()
 X.listing = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatListing.lua?v=1"))()
 local NormalColorBlock = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatColors.lua?v=1"))()
 local LZ4 = loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatLZ4.lua?v=1"))()
