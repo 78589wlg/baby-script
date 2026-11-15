@@ -267,6 +267,7 @@ end
 buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
 T2:Section({Title="── 复制船（下面的按钮都在本页）──"})
+getgenv().BabyVoltraHostTab=T2  -- Voltra 界面直接嵌入本页
 local urls={
 "https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=3",
 "https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BoatCopyMain.lua",
