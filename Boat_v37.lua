@@ -264,18 +264,11 @@ copyBuilt=true
 buildCopyUI()
 end
 
--- 点按钮才加载：异步执行，加载期间游戏不卡死
-local loadCopy
-loadCopy=function()
-copyBuilt=true
-task.spawn(buildCopyUI)
-end
-
 buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
 getgenv().BabyVoltraHostTab=T2  -- Voltra 界面嵌入「复制船」页
 local urls={
-"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=5",
+"https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua?v=6",
 "https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua"
 }
 local done=false
@@ -297,9 +290,6 @@ end
 if not done then
 WindUI:Notify({Title="复制船",Content="网上源码拉取失败，稍后点「重新加载网上源码」再试",Duration=10})
 end
-T2:Button({Title="重新加载网上源码",Callback=function()
-pcall(function()loadstring(game:HttpGet(urls[1]))()end)
-end})
 end
 
 
@@ -315,12 +305,28 @@ WindUI:Notify({Title="提示",Content="在「刷钱」页点验证后会自动�
 end})
 end
 
--- 不自动加载（一进游戏就塞一百多个控件会卡死）：点按钮才加载
-T2:Section({Title="复制船功能（点下面按钮才开始加载）"})
-T2:Button({Title="点我加载复制船功能",Callback=function()
-loadCopy()
+-- 每个功能单独一个按钮，点了才渲染（核心下载后控件只排队，不上屏）
+T2:Section({Title="复制船功能（先点 1 下载核心，再点要用的功能）"})
+T2:Button({Title="1. 点我下载复制船核心",Callback=function()
+copyBuilt=true
+task.spawn(buildCopyUI)
 end})
-T2:Button({Title="重新加载复制船功能（界面乱了就点这个）",Callback=function()
+T2:Button({Title="2. 保存船 / 建造船（主菜单）",Callback=function()
+getgenv().BabyVoltraLoadPage("主菜单")
+end})
+T2:Button({Title="3. 图片转方块",Callback=function()
+getgenv().BabyVoltraLoadPage("图片")
+end})
+T2:Button({Title="4. 加载器（形状/文字/二维码）",Callback=function()
+getgenv().BabyVoltraLoadPage("加载器")
+end})
+T2:Button({Title="5. 3D 模型",Callback=function()
+getgenv().BabyVoltraLoadPage("3D 模型")
+end})
+T2:Button({Title="6. 调整（位置/旋转/缩放）",Callback=function()
+getgenv().BabyVoltraLoadPage("调整")
+end})
+T2:Button({Title="重新下载核心（更新/出错用）",Callback=function()
 copyBuilt=false
-loadCopy()
+task.spawn(buildCopyUI)
 end})
