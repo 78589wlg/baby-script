@@ -2575,10 +2575,10 @@ function X.LoadBlocks(blocksData, teamName, keybindsData, connectionsData)
                 task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Anchored", {block}, true)
             end
             if data.Transparency and data.Transparency > 0 then
-                local steps = math_floor(data.Transparency / 0.25 + 0.5)
-                for i = 1, steps do
-                    task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Transparency", {block}, 0.25)
-                end
+                local t = math_floor(data.Transparency / 0.25 + 0.5) * 0.25
+                if t > 1 then t = 1 end
+                -- 一次性设置真实透明度（按游戏属性面板的 25% 一档取整）
+                task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Transparency", {block}, t)
             end
         end
 
