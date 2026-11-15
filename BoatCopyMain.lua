@@ -2202,7 +2202,7 @@ function X.LoadBlocks(blocksData, teamName, keybindsData, connectionsData)
                         local t0 = os.clock()
                         pcall(remoteInvoke, buildingTool,
                             blockType, blockCount, nil, nil,
-                            blockData.Anchored ~= false, cframe, secondaryCFrame)
+                            true, cframe, secondaryCFrame) -- 强制锚定，不解除
                         X.AutoTrackResponse(os.clock() - t0)
                         activeThreads = activeThreads - 1
                     end)
@@ -2219,7 +2219,7 @@ function X.LoadBlocks(blocksData, teamName, keybindsData, connectionsData)
             task_spawn(function()
                 local t0 = os.clock()
                 pcall(remoteInvoke, buildingTool, blockType, blockCount, nil, nil,
-                    blockData.Anchored ~= false, cframe)
+                    true, cframe) -- 强制锚定，不解除
                 X.AutoTrackResponse(os.clock() - t0)
                 activeThreads = activeThreads - 1
             end)
@@ -2569,11 +2569,8 @@ function X.LoadBlocks(blocksData, teamName, keybindsData, connectionsData)
             if data.CanCollide == false then
                 task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Collision", {block}, false)
             end
-            if data.Anchored == false then
-                task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Anchored", {block}, false)
-            elseif data.Anchored ~= false then
-                task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Anchored", {block}, true)
-            end
+            -- 一律保持锚定，不再解除（复制出来直接散架的修复）
+            task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Anchored", {block}, true)
             if data.Transparency and data.Transparency > 0 then
                 local t = math_floor(data.Transparency / 0.25 + 0.5) * 0.25
                 if t > 1 then t = 1 end
