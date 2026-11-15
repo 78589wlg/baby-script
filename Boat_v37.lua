@@ -305,14 +305,51 @@ WindUI:Notify({Title="提示",Content="在「刷钱」页点验证后会自动�
 end})
 end
 
+-- ===== 多工具：所有工具一起拿（原版一次只能拿一个） =====
+local MT=LP:WaitForChild("Backpack")
+local multiOn=false
+local function equipAllTools()
+local ch=LP.Character
+if not ch then return 0 end
+local n=0
+for _,t in ipairs(MT:GetChildren())do
+if t:IsA("Tool")then
+t.Parent=ch  -- 直接塞进角色=同时装备，不走 Humanid 只拿一把的逻辑
+n=n+1
+end
+end
+for _,t in ipairs(ch:GetChildren())do
+if t:IsA("Tool")then n=n+1 end
+end
+return n
+end
+LP.CharacterAdded:Connect(function(ch)
+task.wait(0.6)
+if multiOn then task.spawn(equipAllTools) end
+end)
+T2:Toggle({Title="多工具（所有工具一起拿，重生后自动重新拿）",Value=false,Callback=function(v)
+multiOn=v
+if v then
+local n=equipAllTools()
+WindUI:Notify({Title="多工具",Content="已拿出 "..n.." 个工具",Duration=5})
+else
+WindUI:Notify({Title="多工具",Content="已关闭，重生后恢复正常",Duration=4})
+end
+end})
+T2:Button({Title="立刻拿出所有工具",Callback=function()
+local n=equipAllTools()
+WindUI:Notify({Title="多工具",Content="已拿出 "..n.." 个工具",Duration=5})
+end})
+
 -- 每个功能单独一个按钮，点了才渲染（核心下载后控件只排队，不上屏）
 T2:Section({Title="复制船功能（先点 1 下载核心，再点要用的功能）"})
 T2:Button({Title="1. 点我下载复制船核心",Callback=function()
 copyBuilt=true
 task.spawn(buildCopyUI)
 end})
-T2:Button({Title="2. 保存船 / 建造船（主菜单）",Callback=function()
+T2:Button({Title="2. 保存船 / 建造船（主菜单）·自动拿全部工具",Callback=function()
 getgenv().BabyVoltraLoadPage("主菜单")
+task.spawn(equipAllTools)
 end})
 T2:Button({Title="3. 图片转方块",Callback=function()
 getgenv().BabyVoltraLoadPage("图片")
