@@ -264,6 +264,13 @@ copyBuilt=true
 buildCopyUI()
 end
 
+-- 点按钮才加载：异步执行，加载期间游戏不卡死
+local loadCopy
+loadCopy=function()
+copyBuilt=true
+task.spawn(buildCopyUI)
+end
+
 buildCopyUI=function()
 -- 复制/导出/建造整套功能已换成网上现成源码（Voltra Build System，明文，自带存档、加载、图像与地形生成）
 getgenv().BabyVoltraHostTab=T2  -- Voltra 界面嵌入「复制船」页
@@ -272,9 +279,11 @@ local urls={
 "https://raw.githubusercontent.com/78589wlg/baby-script/main/BoatCopyMain.lua"
 }
 local done=false
+WindUI:Notify({Title="复制船",Content="正在加载功能，稍等几秒，界面会陆续出现",Duration=8})
 for _,u in ipairs(urls)do
 local okd,src=pcall(function()return game:HttpGet(u)end)
 if okd and src and #src>10000 then
+task.wait()
 local okl,err=pcall(function()loadstring(src)()end)
 if okl then
 done=true
@@ -306,4 +315,12 @@ WindUI:Notify({Title="提示",Content="在「刷钱」页点验证后会自动�
 end})
 end
 
-buildCopyOnce()
+-- 不自动加载（一进游戏就塞一百多个控件会卡死）：点按钮才加载
+T2:Section({Title="复制船功能（点下面按钮才开始加载）"})
+T2:Button({Title="点我加载复制船功能",Callback=function()
+loadCopy()
+end})
+T2:Button({Title="重新加载复制船功能（界面乱了就点这个）",Callback=function()
+copyBuilt=false
+loadCopy()
+end})
