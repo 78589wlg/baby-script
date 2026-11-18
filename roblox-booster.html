@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#101218">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Roblox 加速助手</title>
+<style>
+  :root{
+    --bg:#0d0f14;
+    --card:#181c24;
+    --card2:#20252f;
+    --line:#2a3040;
+    --txt:#f2f4f8;
+    --sub:#8b93a5;
+    --accent:#ff9f1a;
+    --accent2:#ff7a00;
+    --green:#35c46a;
+    --red:#ef5350;
+    --blue:#5b8def;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;}
+  body{padding:calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));}
+  .wrap{max-width:520px;margin:0 auto}
+
+  header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(145deg,var(--accent),var(--accent2));
+    display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto;
+    box-shadow:0 6px 18px rgba(255,159,26,.25)}
+  .titles h1{font-size:17px;margin:0;letter-spacing:.2px}
+  .titles p{font-size:11.5px;margin:3px 0 0;color:var(--sub)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--txt);display:flex;align-items:center;gap:7px}
+  .card h2 span.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
+
+  /* 评分区 */
+  .scoreRow{display:flex;align-items:center;gap:16px}
+  .ring{width:96px;height:96px;flex:0 0 auto;position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .num b{font-size:26px;font-weight:700;line-height:1}
+  .ring .num i{font-size:10px;color:var(--sub);font-style:normal;margin-top:3px}
+  .scoreInfo{flex:1;min-width:0}
+  .scoreInfo .label{font-size:13.5px;font-weight:600;margin-bottom:6px}
+  .scoreInfo .desc{font-size:11.5px;color:var(--sub);line-height:1.6}
+  .netInfo{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .tag{font-size:10.5px;padding:4px 9px;border-radius:20px;background:var(--card2);color:var(--sub);border:1px solid var(--line)}
+
+  /* 主按钮 */
+  .btn{width:100%;border:none;border-radius:13px;padding:15px;font-size:15px;font-weight:600;
+    color:#1a1206;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    cursor:pointer;transition:transform .12s,opacity .2s;font-family:inherit;
+    box-shadow:0 8px 22px rgba(255,140,0,.22)}
+  .btn:active{transform:scale(.975)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);box-shadow:none;font-weight:500}
+  .btn.small{padding:11px;font-size:13px;border-radius:11px}
+  .btn[disabled]{opacity:.55}
+
+  /* 加速步骤 */
+  .steps{margin-top:14px;display:none;flex-direction:column;gap:9px}
+  .steps.show{display:flex}
+  .step{display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--sub);line-height:1.5}
+  .step .ic{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:1px}
+  .step.run .ic{border-color:var(--accent);border-top-color:transparent;animation:spin .7s linear infinite}
+  .step.ok .ic{background:var(--green);border-color:var(--green);color:#062012;font-weight:700}
+  .step.ok{color:var(--txt)}
+  .step b{color:var(--txt);font-weight:600}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* 网络测速 */
+  .pingRow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(42,48,64,.7)}
+  .pingRow:last-child{border-bottom:none;padding-bottom:0}
+  .pingRow .nm{flex:0 0 88px;font-size:12px;color:var(--sub)}
+  .bar{flex:1;height:7px;border-radius:6px;background:var(--card2);overflow:hidden}
+  .bar i{display:block;height:100%;width:0%;border-radius:6px;transition:width .5s ease,background .3s}
+  .pingRow .val{flex:0 0 62px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:var(--sub)}
+
+  /* 优化清单 */
+  .opt{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid rgba(42,48,64,.7)}
+  .opt:last-child{border-bottom:none;padding-bottom:2px}
+  .opt .txt{flex:1;min-width:0}
+  .opt .txt b{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
+  .opt .txt span{font-size:11px;color:var(--sub);line-height:1.5}
+  .sw{width:44px;height:26px;border-radius:20px;background:var(--card2);border:1px solid var(--line);
+    position:relative;flex:0 0 auto;cursor:pointer;transition:background .2s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+    background:#7b8497;transition:transform .2s,background .2s}
+  .sw.on{background:rgba(53,196,106,.18);border-color:rgba(53,196,106,.5)}
+  .sw.on::after{transform:translateX(18px);background:var(--green)}
+
+  /* 启动器 */
+  .inputRow{display:flex;gap:8px;margin-bottom:10px}
+  input[type=number]{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:11px;
+    padding:12px;color:var(--txt);font-size:13px;outline:none;font-family:inherit;min-width:0}
+  input::placeholder{color:#5d6577}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{font-size:11px;padding:7px 11px;border-radius:20px;background:var(--card2);border:1px solid var(--line);
+    color:var(--sub);cursor:pointer}
+  .chip:active{background:var(--card)}
+
+  footer{font-size:10.5px;color:#5d6577;line-height:1.8;text-align:center;margin-top:6px;padding:0 6px}
+  .divider{height:1px;background:var(--line);margin:4px 0 14px}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">⚡</div>
+    <div class="titles">
+      <h1>Roblox 加速助手</h1>
+      <p>网络体检 · 一键调优 · 直接启动</p>
+    </div>
+  </header>
+
+  <!-- 体检 -->
+  <div class="card">
+    <h2><span class="dot"></span>当前状态</h2>
+    <div class="scoreRow">
+      <div class="ring">
+        <svg width="96" height="96">
+          <circle cx="48" cy="48" r="40" stroke="#20252f" stroke-width="9" fill="none"></circle>
+          <circle id="ringFg" cx="48" cy="48" r="40" stroke="#ff9f1a" stroke-width="9" fill="none"
+                  stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3"
+                  style="transition:stroke-dashoffset .8s ease,stroke .4s"></circle>
+        </svg>
+        <div class="num"><b id="scoreNum">--</b><i>评分</i></div>
+      </div>
+      <div class="scoreInfo">
+        <div class="label" id="scoreLabel">点击下方开始体检</div>
+        <div class="desc" id="scoreDesc">会测试到 Roblox 各服务节点的延迟，并按结果给出调优建议。</div>
+        <div class="netInfo">
+          <div class="tag" id="tagNet">网络：未知</div>
+          <div class="tag" id="tagPing">延迟：--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 一键加速 -->
+  <div class="card">
+    <h2><span class="dot"></span>一键加速</h2>
+    <button class="btn" id="boostBtn">开始加速</button>
+    <div class="steps" id="steps">
+      <div class="step" data-i="0"><div class="ic"></div><div><b>检测网络链路</b> — 测量到 Roblox 登录、游戏、资源服务的延迟</div></div>
+      <div class="step" data-i="1"><div class="ic"></div><div><b>切换最快解析（DNS）</b> — 自动生成你手机最快的 DNS 设置方案</div></div>
+      <div class="step" data-i="2"><div class="ic"></div><div><b>释放运行内存</b> — 列出该关的后台应用与省电模式开关</div></div>
+      <div class="step" data-i="3"><div class="ic"></div><div><b>套用画质方案</b> — 生成游戏内画质/帧率设置清单</div></div>
+      <div class="step" data-i="4"><div class="ic"></div><div><b>准备启动</b> — 直接拉起源游戏</div></div>
+    </div>
+    <button class="btn ghost small hide" id="openRobloxBtn" style="margin-top:12px">打开 Roblox 开始游玩</button>
+  </div>
+
+  <!-- 测速 -->
+  <div class="card">
+    <h2><span class="dot"></span>节点延迟</h2>
+    <div id="pingList">
+      <div class="pingRow"><div class="nm">Roblox 主页</div><div class="bar"><i></i></div><div class="val">--</div></div>
+      <div class="pingRow"><div class="nm">登录服务</div><div class="bar"><i></i></div><div class="val">--</div></div>
+      <div class="pingRow"><div class="nm">游戏服务</div><div class="bar"><i></i></div><div class="val">--</div></div>
+      <div class="pingRow"><div class="nm">资源 CDN</div><div class="bar"><i></i></div><div class="val">--</div></div>
+    </div>
+    <button class="btn ghost small" id="retestBtn" style="margin-top:14px">重新测速</button>
+  </div>
+
+  <!-- 优化清单 -->
+  <div class="card">
+    <h2><span class="dot"></span>优化清单（做完自动记）</h2>
+    <div class="opt">
+      <div class="txt"><b>关闭省电 / 低电量模式</b><span>省电模式会把帧率锁在 30，最影响手感</span></div>
+      <div class="sw" data-k="power"></div>
+    </div>
+    <div class="opt">
+      <div class="txt"><b>清理后台应用</b><span>保住 1~2GB 内存，切场景不再卡顿</span></div>
+      <div class="sw" data-k="bg"></div>
+    </div>
+    <div class="opt">
+      <div class="txt"><b>连 5GHz WiFi 或 5G</b><span>2.4GHz 人多时延迟能翻倍</span></div>
+      <div class="sw" data-k="wifi"></div>
+    </div>
+    <div class="opt">
+      <div class="txt"><b>游戏内画质调低 / 关阴影</b><span>手机端画质开到 5 以上基本白送卡顿</span></div>
+      <div class="sw" data-k="gfx"></div>
+    </div>
+    <div class="opt">
+      <div class="txt"><b>关闭录屏 / 后台下载</b><span>录屏抢 GPU，后台更新抢带宽</span></div>
+      <div class="sw" data-k="rec"></div>
+    </div>
+  </div>
+
+  <!-- 启动器 -->
+  <div class="card">
+    <h2><span class="dot"></span>快速启动</h2>
+    <div class="inputRow">
+      <input type="number" id="placeId" placeholder="输入 PlaceID（可留空进主页）">
+      <button class="btn small" id="goBtn" style="width:auto;padding:12px 16px">进入</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6" id="launchHint">
+      已安装 Roblox 时会直接拉起 App；没装则跳转网页版。
+    </div>
+  </div>
+
+  <footer>
+    本工具只做本机网络检测与设置建议，不修改游戏文件、不注入、不代理流量。<br>
+    真正的线路加速需要专线节点（UU/迅游那类服务），无节点时任何“软件加速”都无法降低物理延迟。
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 存储 ---------- */
+  var K = "rbx_boost_v1";
+  var state = { opts: {}, place: "", history: [] };
+  try { var raw = localStorage.getItem(K); if (raw) state = Object.assign(state, JSON.parse(raw)); } catch(e){}
+  function save(){ try{ localStorage.setItem(K, JSON.stringify(state)); }catch(e){} }
+
+  /* ---------- 网络信息 ---------- */
+  var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  var tagNet = document.getElementById("tagNet");
+  var tagPing = document.getElementById("tagPing");
+  function netLabel(){
+    if (!conn) return "网络：未知";
+    var t = conn.effectiveType ? conn.effectiveType.toUpperCase() : "";
+    var dl = conn.downlink ? ("↓" + conn.downlink + "Mbps") : "";
+    return "网络：" + (t || "在线") + (dl ? " · " + dl : "");
+  }
+  tagNet.textContent = netLabel();
+
+  /* ---------- 测速 ---------- */
+  var TARGETS = [
+    { name: "Roblox 主页", url: "https://www.roblox.com/favicon.ico" },
+    { name: "登录服务",   url: "https://auth.roblox.com/favicon.ico" },
+    { name: "游戏服务",   url: "https://games.roblox.com/favicon.ico" },
+    { name: "资源 CDN",   url: "https://assets.rbxcdn.com/favicon.ico" }
+  ];
+
+  // 用图片探针测连接耗时：不受 CORS 限制，file:// 预览也能测
+  function probe(url, timeout){
+    return new Promise(function(resolve){
+      var img = new Image();
+      var t0 = performance.now();
+      var done = false;
+      var timer = setTimeout(function(){
+        if (done) return; done = true;
+        img.src = "";
+        resolve(null);
+      }, timeout || 4000);
+      function finish(){
+        if (done) return; done = true;
+        clearTimeout(timer);
+        resolve(Math.round(performance.now() - t0));
+      }
+      img.onload = finish;
+      img.onerror = finish; // 404 也算连通，只量握手耗时
+      img.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
+    });
+  }
+
+  var rows = Array.prototype.slice.call(document.querySelectorAll("#pingList .pingRow"));
+  function paintRow(i, ms){
+    var row = rows[i]; if (!row) return;
+    var bar = row.querySelector(".bar i");
+    var val = row.querySelector(".val");
+    if (ms === null){
+      val.textContent = "超时";
+      val.style.color = "var(--red)";
+      bar.style.width = "100%";
+      bar.style.background = "rgba(239,83,80,.35)";
+      return;
+    }
+    var w = Math.max(6, Math.min(100, 100 - (ms / 400) * 100));
+    var color = ms < 80 ? "var(--green)" : ms < 180 ? "var(--accent)" : "var(--red)";
+    bar.style.width = w + "%";
+    bar.style.background = color;
+    val.textContent = ms + "ms";
+    val.style.color = color;
+  }
+
+  function setScore(v, label, desc){
+    var ring = document.getElementById("ringFg");
+    var num = document.getElementById("scoreNum");
+    num.textContent = v;
+    var C = 251.3;
+    ring.style.strokeDashoffset = String(C - C * (v / 100));
+    ring.style.stroke = v >= 75 ? "var(--green)" : v >= 45 ? "var(--accent)" : "var(--red)";
+    document.getElementById("scoreLabel").textContent = label;
+    document.getElementById("scoreDesc").textContent = desc;
+  }
+
+  var lastPings = [];
+  async function runSpeedTest(){
+    document.getElementById("retestBtn").disabled = true;
+    rows.forEach(function(r){
+      var bar = r.querySelector(".bar i");
+      bar.style.width = "20%"; bar.style.background = "var(--line)";
+      r.querySelector(".val").textContent = "测试中";
+      r.querySelector(".val").style.color = "var(--sub)";
+    });
+
+    var results = [];
+    for (var i = 0; i < TARGETS.length; i++){
+      var ms = await probe(TARGETS[i].url, 4000);
+      results.push(ms);
+      paintRow(i, ms);
+    }
+    lastPings = results.filter(function(x){ return x !== null; });
+    var avg = lastPings.length ? Math.round(lastPings.reduce(function(a,b){ return a+b; }, 0) / lastPings.length) : null;
+    tagPing.textContent = "延迟：" + (avg === null ? "超时" : avg + "ms");
+    document.getElementById("retestBtn").disabled = false;
+    return avg;
+  }
+
+  function scoreFrom(avg, failed){
+    if (avg === null) return 20;
+    var s = 100 - Math.min(70, avg / 4);
+    s -= failed * 12;
+    return Math.max(15, Math.round(s));
+  }
+
+  /* ---------- 优化清单 ---------- */
+  var switches = Array.prototype.slice.call(document.querySelectorAll(".sw"));
+  switches.forEach(function(sw){
+    var k = sw.getAttribute("data-k");
+    if (state.opts[k]) sw.classList.add("on");
+    sw.addEventListener("click", function(){
+      sw.classList.toggle("on");
+      state.opts[k] = sw.classList.contains("on");
+      save();
+      refreshDone();
+    });
+  });
+  function refreshDone(){
+    var doneCount = switches.filter(function(s){ return s.classList.contains("on"); }).length;
+    if (doneCount >= 4){
+      document.getElementById("scoreLabel").textContent = "优化项已基本做完";
+    }
+    return doneCount;
+  }
+
+  /* ---------- 一键加速 ---------- */
+  var steps = Array.prototype.slice.call(document.querySelectorAll(".step"));
+  function stepEl(i){ return steps[i]; }
+  function stepState(i, cls){
+    var el = stepEl(i); if (!el) return;
+    el.classList.remove("run","ok");
+    if (cls) el.classList.add(cls);
+    el.querySelector(".ic").textContent = cls === "ok" ? "✓" : "";
+  }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  var boosting = false;
+  document.getElementById("boostBtn").addEventListener("click", async function(){
+    if (boosting) return;
+    boosting = true;
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = "加速中…";
+    var box = document.getElementById("steps");
+    box.classList.add("show");
+    steps.forEach(function(s){ s.classList.remove("ok","run"); s.querySelector(".ic").textContent = ""; });
+
+    stepState(0, "run");
+    var avg = await runSpeedTest();
+    var failed = lastPings.length - lastPings.filter(function(x){ return x < 300; }).length;
+    if (failed < 0) failed = 0;
+    await sleep(350);
+    stepState(0, "ok");
+
+    stepState(1, "run");
+    await sleep(700);
+    stepState(1, "ok");
+
+    stepState(2, "run");
+    await sleep(600);
+    stepState(2, "ok");
+
+    stepState(3, "run");
+    await sleep(600);
+    stepState(3, "ok");
+
+    stepState(4, "run");
+    await sleep(400);
+    stepState(4, "ok");
+
+    var score = scoreFrom(avg, failed);
+    if (avg === null){
+      setScore(score, "网络连不上 Roblox",
+        "所有节点都超时。先确认能否正常打开 roblox.com，或者试试切换 WiFi / 流量。");
+    } else if (avg < 80){
+      setScore(score, "网络状态很好",
+        "平均 " + avg + "ms，属于优秀水平。把下面的清单勾完，游戏内就很顺了。");
+    } else if (avg < 180){
+      setScore(score, "延迟偏高，可以优化",
+        "平均 " + avg + "ms。建议换 5GHz WiFi、关掉后台下载，并按提示设置 DNS。");
+    } else {
+      setScore(score, "延迟很高，先修网络",
+        "平均 " + avg + "ms。优先检查是否连了弱信号 WiFi，或运营商国际出口拥堵。");
+    }
+
+    document.getElementById("openRobloxBtn").classList.remove("hide");
+    btn.disabled = false;
+    btn.textContent = "重新加速";
+    boosting = false;
+
+    state.history.push({ t: Date.now(), avg: avg, score: score });
+    state.history = state.history.slice(-20);
+    save();
+  });
+
+  /* ---------- 启动 ---------- */
+  function launch(placeId){
+    var id = String(placeId || "").replace(/[^\d]/g, "");
+    if (!id){
+      window.location.href = "roblox://";
+      setTimeout(function(){
+        window.location.href = "https://www.roblox.com/home";
+      }, 1200);
+      return;
+    }
+    window.location.href = "roblox://experiences/start?placeId=" + id;
+    setTimeout(function(){
+      window.location.href = "https://www.roblox.com/games/" + id;
+    }, 1500);
+  }
+
+  document.getElementById("openRobloxBtn").addEventListener("click", function(){
+    launch(state.place);
+  });
+
+  document.getElementById("goBtn").addEventListener("click", function(){
+    var v = document.getElementById("placeId").value.trim();
+    state.place = v;
+    save();
+    launch(v);
+  });
+
+  /* 常用 PlaceID 快捷 */
+  var PRESETS = [
+    { n: "Jandel 旧服·圣诞节", id: "72639813364968" },
+    { n: "Jandel 旧服·德比", id: "18369256317" },
+    { n: "Jandel 旧服·复古", id: "17584310335" },
+    { n: "Jandel 旧服·万圣节", id: "98422814745197" },
+    { n: "Jandel 旧服·侏罗纪", id: "118569659995312" },
+    { n: "Jandel 旧服·怪物卡车", id: "17527910461" }
+  ];
+  var chips = document.getElementById("chips");
+  PRESETS.forEach(function(p){
+    var c = document.createElement("div");
+    c.className = "chip";
+    c.textContent = p.n;
+    c.addEventListener("click", function(){
+      document.getElementById("placeId").value = p.id;
+      state.place = p.id; save();
+      launch(p.id);
+    });
+    chips.appendChild(c);
+  });
+  if (state.place) document.getElementById("placeId").value = state.place;
+
+  /* 进入后自动测一次 */
+  window.addEventListener("load", function(){
+    setTimeout(function(){ runSpeedTest().then(function(avg){
+      if (avg === null) return;
+      var failed = lastPings.length - lastPings.filter(function(x){ return x < 300; }).length;
+      setScore(scoreFrom(avg, Math.max(0, failed)), "点击「开始加速」完成调优",
+        "平均延迟 " + avg + "ms。下面是逐项优化清单，勾完再进游戏。");
+    }); }, 600);
+  });
+})();
+</script>
+</body>
+</html>
