@@ -569,7 +569,7 @@ function BabyUI:CreateWindow(opt)
 		t = t + dt
 		local rot = (t * 26) % 360
 		rg1.Rotation = rot * 0.8
-		rg1.Transparency = 0.20 + math.sin(t * 1.8) * 0.08
+		rs1.Transparency = 0.34 + math.sin(t * 1.8) * 0.06
 		brot = (brot + dt * 30) % 360
 		if bstrokeGrad then bstrokeGrad.Rotation = brot end
 		if bgrad then bgrad.Rotation = 135 + math.sin(t * 0.6) * 18 end
