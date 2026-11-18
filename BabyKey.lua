@@ -84,6 +84,36 @@ local function label(parent, props)
 	return t
 end
 
+-- ====== 已保存过卡密：直接进，不再让用户输 ======
+-- 判定顺序：本次会话标记 → 本地 BabyKey.txt（上次验证通过时写入）
+do
+	local autoK = nil
+	if type(getgenv) == "function" then
+		local okg, g = pcall(getgenv)
+		if okg and type(g) == "table" and g.babyKeyOK then autoK = "__session__" end
+	end
+	if not autoK then
+		local okr, raw = pcall(function() return readfile("BabyKey.txt") end)
+		if okr and type(raw) == "string" then
+			local k = raw:match("^([^|\r\n]+)")
+			if k then
+				k = k:match("^%s*(.-)%s*$")
+				if k ~= "" then autoK = k end
+			end
+		end
+	end
+	if autoK then
+		local okm = pcall(function()
+			loadstring(game:HttpGet(MAIN_URL .. "?t=" .. tostring(os.time())))()
+		end)
+		if okm then
+			pcall(function() getgenv().babyKeyOK = true end)
+			return
+		end
+		-- 加载失败（多半是网络）：继续往下走，让面板出来重试
+	end
+end
+
 -- ====== 界面 ======
 local gui = Instance.new("ScreenGui")
 gui.Name = "BabyKeyUI"
@@ -416,6 +446,7 @@ local function doConfirm()
 			return
 		end
 		saveKey(k, exp)
+		pcall(function() getgenv().babyKeyOK = true end)
 		setStatus("验证通过 · " .. tostring(msg or ""), true)
 		task.wait(0.8)
 		setStatus("正在加载脚本…", true)
