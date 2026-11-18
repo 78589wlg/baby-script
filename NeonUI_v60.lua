@@ -17,8 +17,7 @@ B=tryLoad("https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BabyUI.lua")
 if B then UI_SRC="镜像源" end
 end
 if not B then
-local EMBED=[====[
---[[ ============================================================
+local EMBED=[====[--[[ ============================================================
      BabyUI v1.0  —— 自制轻量 UI 库
      特性：
        · 半透明玻璃窗体（中间透，能看见游戏画面）
@@ -159,7 +158,8 @@ local notifList = {}
 local notifHolder = inst("Frame", {
 	Name = "Notifs",
 	Size = UDim2.new(0, 300, 1, 0),
-	Position = UDim2.new(1, 0, 0, 8),
+	Position = UDim2.new(1, -12, 0, 10),
+	AnchorPoint = Vector2.new(1, 0),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 	ZIndex = 60,
@@ -456,8 +456,8 @@ function BabyUI:CreateWindow(opt)
 	-- ===== 收起按钮（方形玻璃砖：投影 + 彩色描边 + 内圈细边 + 顶部高光）=====
 	local bShadow = inst("Frame", {
 		Name = "BallShadow",
-		Size = UDim2.fromOffset(58, 58),
-		Position = UDim2.new(1, -72, 0, 264),
+		Size = UDim2.fromOffset(58, 70),
+		Position = UDim2.new(1, -72, 0, 262),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = 0.66,
 		BorderSizePixel = 0,
@@ -467,10 +467,10 @@ function BabyUI:CreateWindow(opt)
 
 	local ball = inst("TextButton", {
 		Name = "Ball",
-		Size = UDim2.fromOffset(54, 54),
-		Position = UDim2.new(1, -70, 0, 262),
+		Size = UDim2.fromOffset(54, 66),
+		Position = UDim2.new(1, -70, 0, 260),
 		BackgroundColor3 = Color3.fromRGB(17, 21, 33),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.66,
 		Text = "",
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
@@ -500,7 +500,7 @@ function BabyUI:CreateWindow(opt)
 		BorderSizePixel = 0,
 		ZIndex = 51,
 	}, ball)
-	round(bInner, 12)
+	round(bInner, 13)
 	local bInnerStroke = stroke(bInner, WHT, 0.86, 1)
 
 	-- 顶部高光条：玻璃反光
@@ -526,10 +526,10 @@ function BabyUI:CreateWindow(opt)
 
 	-- 悬停/按下的一点反馈
 	ball.MouseEnter:Connect(function()
-		tweenTo(ball, { BackgroundTransparency = 0.0 }, 0.14)
+		tweenTo(ball, { BackgroundTransparency = 0.46 }, 0.14)
 	end)
 	ball.MouseLeave:Connect(function()
-		tweenTo(ball, { BackgroundTransparency = 0.08 }, 0.14)
+		tweenTo(ball, { BackgroundTransparency = 0.66 }, 0.14)
 	end)
 
 	local ballDrag = false
@@ -1336,7 +1336,6 @@ function Tab:Dropdown(o)
 end
 
 return BabyUI
-
 ]====]
 local okE,rE=pcall(function()
 return loadstring(EMBED)()
