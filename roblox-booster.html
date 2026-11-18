@@ -420,17 +420,16 @@
   /* ---------- 启动 ---------- */
   function launch(placeId){
     var id = String(placeId || "").replace(/[^\d]/g, "");
-    if (!id){
-      window.location.href = "roblox://";
-      setTimeout(function(){
-        window.location.href = "https://www.roblox.com/home";
-      }, 1200);
-      return;
+    var deep = id ? ("roblox://experiences/start?placeId=" + id) : "roblox://";
+    var web  = id ? ("https://www.roblox.com/games/" + id) : "https://www.roblox.com/home";
+    // 装成 App 时走原生 Intent（WebView 自身打不开 roblox:// 协议）
+    if (window.AndroidBridge && window.AndroidBridge.openUrl){
+      try { window.AndroidBridge.openUrl(deep); return; } catch(e){}
     }
-    window.location.href = "roblox://experiences/start?placeId=" + id;
+    window.location.href = deep;
     setTimeout(function(){
-      window.location.href = "https://www.roblox.com/games/" + id;
-    }, 1500);
+      window.location.href = web;
+    }, id ? 1500 : 1200);
   }
 
   document.getElementById("openRobloxBtn").addEventListener("click", function(){
