@@ -168,6 +168,7 @@ local function countLines(s)
 end
 
 function BabyUI:Notify(o)
+	if not gui or not gui.Parent then return end
 	o = o or {}
 	local title = tostring(o.Title or "提示")
 	local content = tostring(o.Content or "")
@@ -196,7 +197,6 @@ function BabyUI:Notify(o)
 		ZIndex = 62,
 	}, card)
 	round(bar, 2)
-	gradient(bar, 90)
 
 	mklabel(card, {
 		Size = UDim2.new(1, -20, 0, 18),
@@ -238,21 +238,14 @@ end
 
 -- ============ 主题 ============
 local THEMES = {
-	Dark = { 255, 138, 66 },
-	Light = { 90, 160, 255 },
-	Rose = { 255, 110, 160 },
-	Plant = { 110, 220, 150 },
-	Red = { 255, 92, 92 },
-	Indigo = { 130, 120, 255 },
-	Sky = { 92, 190, 255 },
-	Violet = { 180, 120, 255 },
-	Amber = { 255, 180, 70 },
-	Emerald = { 80, 220, 180 },
-	Midnight = { 120, 140, 255 },
-	Crimson = { 240, 80, 110 },
-	MonokaiPro = { 255, 150, 80 },
-	CottonCandy = { 255, 150, 210 },
-	Mellow = { 200, 160, 255 },
+	["落日"] = { 255, 138, 66 },
+	["极光"] = { 79, 227, 193 },
+	["深海"] = { 74, 158, 255 },
+	["樱花"] = { 255, 127, 168 },
+	["森林"] = { 111, 208, 140 },
+	["紫夜"] = { 169, 139, 255 },
+	["熔岩"] = { 255, 90, 90 },
+	["月白"] = { 216, 224, 240 },
 }
 
 function BabyUI:SetTheme(name)
@@ -275,7 +268,7 @@ function BabyUI:CreateWindow(opt)
 	opt = opt or {}
 	local vp = viewport()
 	local W = clamp(math.floor(vp.X - 40), 300, 620)
-	local H = clamp(math.floor(vp.Y - 100), 300, 440)
+	local H = clamp(math.floor(vp.Y - 70), 320, 520)
 
 	local shell = inst("Frame", {
 		Name = "Shell",
@@ -318,7 +311,6 @@ function BabyUI:CreateWindow(opt)
 		ZIndex = 4,
 	}, titleBar)
 	round(logoBar, 2)
-	gradient(logoBar, 90)
 
 	mklabel(titleBar, {
 		Size = UDim2.new(1, -150, 1, 0),
@@ -366,7 +358,6 @@ function BabyUI:CreateWindow(opt)
 		BorderSizePixel = 0,
 		ZIndex = 3,
 	}, root)
-	gradient(divLine, 0)
 
 	-- ===== 页签栏 =====
 	local tabW = clamp(math.floor(W * 0.28), 92, 140)
@@ -437,8 +428,8 @@ function BabyUI:CreateWindow(opt)
 	-- ===== 收起按钮（方形玻璃砖：投影 + 彩色描边 + 内圈细边 + 顶部高光）=====
 	local bShadow = inst("Frame", {
 		Name = "BallShadow",
-		Size = UDim2.fromOffset(58, 70),
-		Position = UDim2.new(1, -72, 0, 262),
+		Size = UDim2.fromOffset(58, 58),
+		Position = UDim2.new(1, -72, 0, 264),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = 0.66,
 		BorderSizePixel = 0,
@@ -448,8 +439,8 @@ function BabyUI:CreateWindow(opt)
 
 	local ball = inst("TextButton", {
 		Name = "Ball",
-		Size = UDim2.fromOffset(54, 66),
-		Position = UDim2.new(1, -70, 0, 260),
+		Size = UDim2.fromOffset(54, 54),
+		Position = UDim2.new(1, -70, 0, 262),
 		BackgroundColor3 = Color3.fromRGB(17, 21, 33),
 		BackgroundTransparency = 0.66,
 		Text = "",
@@ -481,7 +472,7 @@ function BabyUI:CreateWindow(opt)
 		BorderSizePixel = 0,
 		ZIndex = 51,
 	}, ball)
-	round(bInner, 13)
+	round(bInner, 12)
 	local bInnerStroke = stroke(bInner, WHT, 0.86, 1)
 
 	-- 顶部高光条：玻璃反光
@@ -513,12 +504,15 @@ function BabyUI:CreateWindow(opt)
 		tweenTo(ball, { BackgroundTransparency = 0.66 }, 0.14)
 	end)
 
+	local dead = false
+	local renderConn = nil
 	local ballDrag = false
 	local ballMoved = false
 	local ballStart = nil
 	local ballOrigin = nil
 
 	ball.InputBegan:Connect(function(input)
+		if dead then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			ballDrag = true
 			ballMoved = false
@@ -527,7 +521,7 @@ function BabyUI:CreateWindow(opt)
 		end
 	end)
 	UIS.InputChanged:Connect(function(input)
-		if not ballDrag then return end
+		if dead or not ballDrag then return end
 		if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
 		local d = input.Position - ballStart
 		if math.abs(d.X) + math.abs(d.Y) > 6 then
@@ -540,7 +534,7 @@ function BabyUI:CreateWindow(opt)
 		bShadow.Position = UDim2.new(0, ball.Position.X.Offset - 2, 0, ball.Position.Y.Offset + 2)
 	end)
 	UIS.InputEnded:Connect(function(input)
-		if not ballDrag then return end
+		if dead or not ballDrag then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if not ballMoved and input.Position then
 				-- 点一下：展开 / 收起
@@ -560,13 +554,18 @@ function BabyUI:CreateWindow(opt)
 		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的方形按钮可以再打开", Duration = 2 })
 	end)
 	btnClose.Activated:Connect(function()
-		shell.Visible = false
+		-- 关闭 = 退出脚本：停掉渲染循环，整块界面移除
+		dead = true
+		if renderConn then pcall(function() renderConn:Disconnect() end) end
+		pcall(function() ball:Destroy() end)
+		pcall(function() bShadow:Destroy() end)
+		pcall(function() gui:Destroy() end)
 	end)
 
 	-- 流光动画：渐变旋转 + 轻微呼吸
 	local t = 0
 	local brot = 0
-	RS.RenderStepped:Connect(function(dt)
+	renderConn = RS.RenderStepped:Connect(function(dt)
 		t = t + dt
 		local rot = (t * 26) % 360
 		rg1.Rotation = rot * 0.8
@@ -597,7 +596,7 @@ function BabyUI:CreateWindow(opt)
 		local accBar = inst("Frame", {
 			Size = UDim2.new(0, 3, 0, 16),
 			Position = UDim2.new(0, 0, 0.5, -8),
-			BackgroundColor3 = ACCENT,
+			BackgroundColor3 = WHT,
 			BorderSizePixel = 0,
 			Visible = false,
 			ZIndex = 5,
@@ -721,7 +720,6 @@ function BabyUI:CreateWindow(opt)
 	-- 主题色跟随
 	regAccent(function(c)
 		for _, t in ipairs(win.Tabs) do
-			t._accBar.BackgroundColor3 = c
 			if win.Current == t then
 				t.TabButton.BackgroundColor3 = c
 			end
@@ -789,7 +787,6 @@ function Tab:Section(o)
 		ZIndex = 6,
 	}, f)
 	round(bar, 2)
-	gradient(bar, 90)
 	mklabel(f, {
 		Size = UDim2.new(1, -14, 1, 0),
 		Position = UDim2.new(0, 12, 0, 0),
@@ -818,16 +815,6 @@ function Tab:Button(o)
 	}, self.Page)
 	round(b, 10)
 	local bs = stroke(b, WHT, 0.9, 1)
-
-	local ab = inst("Frame", {
-		Size = UDim2.new(0, 3, 0, 16),
-		Position = UDim2.new(0, 0, 0.5, -8),
-		BackgroundColor3 = WHT,
-		BorderSizePixel = 0,
-		ZIndex = 6,
-	}, b)
-	round(ab, 2)
-	gradient(ab, 90)
 
 	mklabel(b, {
 		Size = UDim2.new(1, -20, 1, 0),
@@ -1239,8 +1226,7 @@ function Tab:Dropdown(o)
 			ZIndex = 72,
 		}, gui)
 		round(listFrame, 9)
-		local ls = stroke(listFrame, WHT, 0.8, 1)
-		gradient(ls, 0)
+		stroke(listFrame, WHT, 0.8, 1)
 
 		local sf = inst("ScrollingFrame", {
 			Size = UDim2.new(1, -8, 1, -8),
