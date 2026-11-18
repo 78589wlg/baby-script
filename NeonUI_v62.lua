@@ -10,7 +10,7 @@ end)
 if ok and type(r)=="table" and r.CreateWindow then return r end
 return nil
 end
-local B=tryLoad("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=6")
+local B=tryLoad("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=7")
 if B then UI_SRC="远程主源" end
 if not B then
 B=tryLoad("https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BabyUI.lua")
@@ -573,8 +573,11 @@ function BabyUI:CreateWindow(opt)
 		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的方形按钮可以再打开", Duration = 2 })
 	end)
 	local function hardQuit()
-		-- 关闭 = 退出脚本：停掉渲染循环，整块界面移除
+		-- 关闭 = 退出脚本：先让脚本清掉自己开的效果，再停渲染、移除界面
 		dead = true
+		if type(BabyUI.OnQuit) == "function" then
+			pcall(BabyUI.OnQuit)
+		end
 		if renderConn then pcall(function() renderConn:Disconnect() end) end
 		pcall(function() ball:Destroy() end)
 		pcall(function() bShadow:Destroy() end)
@@ -1659,6 +1662,10 @@ LP.CharacterAdded:Connect(function()
 task.wait(1)
 if spinOn then spinStart() end
 end)
+WindUI.OnQuit=function()
+pcall(tpStopFollow)
+pcall(spinStop)
+end
 
 T2=Win:Tab({Title="玩家增强",Icon="user"})
 T2:Section({Title="移动设置"})
