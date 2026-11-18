@@ -1,4 +1,15 @@
-local WindUI=loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
+-- 自制 UI（半透明玻璃窗 + 彩色流光 + 可收成悬浮球）；拉取失败自动回退 WindUI
+local WindUI
+do
+local okB,B=pcall(function()
+return loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=1"))()
+end)
+if okB and type(B)=="table" and B.CreateWindow then
+WindUI=B
+else
+WindUI=loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua"))()
+end
+end
 local P=game:GetService("Players")
 local LP=P.LocalPlayer
 local sp,jp=16,50
