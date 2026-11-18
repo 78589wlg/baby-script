@@ -2,7 +2,7 @@
 local WindUI
 do
 local okB,B=pcall(function()
-return loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=2"))()
+return loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=3"))()
 end)
 if okB and type(B)=="table" and B.CreateWindow then
 WindUI=B
