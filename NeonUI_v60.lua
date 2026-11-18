@@ -1574,7 +1574,7 @@ if not okk then tpStopFollow() end
 end)
 return true
 end
-T6:Dropdown({Title="选择玩家",Values=tpList,Value=tpSel,Callback=function(v)
+local tpDD=T6:Dropdown({Title="选择玩家",Values=tpList,Value=tpSel,Callback=function(v)
 tpSel=v
 end})
 T6:Button({Title="传送到头顶",Callback=function()
@@ -1585,9 +1585,17 @@ else
 WindUI:Notify({Title="传送",Content=tostring(why),Duration=2})
 end
 end})
-T6:Button({Title="刷新玩家列表",Callback=function()
+local function tpRefreshUI()
 tpN=refreshTp()
-tpSel=tpList[1] or ""
+if not tpFind(tpSel) then tpSel=tpList[1] or "" end
+if tpDD then pcall(function()tpDD:Set(tpSel)end) end
+end
+pcall(function()
+P.PlayerAdded:Connect(function() task.defer(tpRefreshUI) end)
+P.PlayerRemoving:Connect(function() task.defer(tpRefreshUI) end)
+end)
+T6:Button({Title="刷新玩家列表",Callback=function()
+tpRefreshUI()
 WindUI:Notify({Title="传送",Content=tpN>0 and ("发现 "..tpN.." 个其他玩家") or "目前没有其他玩家",Duration=2})
 end})
 T6:Toggle({Title="持续跟随头顶",Value=false,Callback=function(v)
