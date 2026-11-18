@@ -554,8 +554,11 @@ function BabyUI:CreateWindow(opt)
 		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的方形按钮可以再打开", Duration = 2 })
 	end)
 	local function hardQuit()
-		-- 关闭 = 退出脚本：停掉渲染循环，整块界面移除
+		-- 关闭 = 退出脚本：先让脚本清掉自己开的效果，再停渲染、移除界面
 		dead = true
+		if type(BabyUI.OnQuit) == "function" then
+			pcall(BabyUI.OnQuit)
+		end
 		if renderConn then pcall(function() renderConn:Disconnect() end) end
 		pcall(function() ball:Destroy() end)
 		pcall(function() bShadow:Destroy() end)
