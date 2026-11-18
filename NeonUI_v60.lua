@@ -324,6 +324,178 @@ jp=v
 local h=hum()
 if h then h.UseJumpPower=true h.JumpPower=jp end
 end})
+T2:Section({Title="飞行设置"})
+local flyOn=false
+local flySpeed=80
+local flyBV,flyBG,flyConn=nil,nil,nil
+local flyHoldUp,flyHoldDown=false,false
+local flyPad,flyPadUp,flyPadDown
+local flyToggleRef
+
+local function buildFlyPad()
+if flyPad then return flyPad end
+local g=Instance.new("ScreenGui")
+g.Name="BabyFlyPad"
+g.ResetOnSpawn=false
+g.IgnoreGuiInset=true
+g.DisplayOrder=900
+pcall(function()g.Parent=game:GetService("CoreGui")end)
+if not g.Parent then g.Parent=LP:WaitForChild("PlayerGui")end
+local function mk(text,posY)
+local b=Instance.new("TextButton")
+b.Size=UDim2.new(0,58,0,58)
+b.Position=UDim2.new(1,-160,0.5,posY)
+b.BackgroundColor3=Color3.fromRGB(28,31,40)
+b.BackgroundTransparency=0.1
+b.Text=text
+b.TextColor3=Color3.fromRGB(255,255,255)
+b.TextSize=22
+b.Font=Enum.Font.GothamBold
+b.AutoButtonColor=false
+b.Parent=g
+local c=Instance.new("UICorner")
+c.CornerRadius=UDim.new(1,0)
+c.Parent=b
+local st=Instance.new("UIStroke")
+st.Color=Color3.fromRGB(245,166,35)
+st.Thickness=1
+st.Transparency=0.4
+st.Parent=b
+return b
+end
+flyPadUp=mk("▲",-36)
+flyPadDown=mk("▼",34)
+local function bindHold(btn,field)
+btn.InputBegan:Connect(function(i)
+if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+if field=="up" then flyHoldUp=true else flyHoldDown=true end
+end
+end)
+btn.InputEnded:Connect(function(i)
+if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+if field=="up" then flyHoldUp=false else flyHoldDown=false end
+end
+end)
+end
+bindHold(flyPadUp,"up")
+bindHold(flyPadDown,"down")
+g.Enabled=false
+flyPad=g
+return g
+end
+
+local function stopFly(quiet)
+flyOn=false
+flyHoldUp=false
+flyHoldDown=false
+if flyConn then flyConn:Disconnect() flyConn=nil end
+if flyBV then pcall(function() flyBV:Destroy() end) flyBV=nil end
+if flyBG then pcall(function() flyBG:Destroy() end) flyBG=nil end
+if flyPad then flyPad.Enabled=false end
+local c=LP.Character
+local h=c and c:FindFirstChildOfClass("Humanoid")
+if h then pcall(function() h.PlatformStand=false end) end
+if not quiet then
+pcall(function() WindUI:Notify({Title="飞行",Content="已关闭",Duration=1}) end)
+end
+end
+
+local function startFly()
+local c=LP.Character
+local h=c and c:FindFirstChildOfClass("Humanoid")
+local hrp=c and c:FindFirstChild("HumanoidRootPart")
+if not (h and hrp) then
+pcall(function() WindUI:Notify({Title="飞行",Content="没找到角色，重生后再试",Duration=2}) end)
+return false
+end
+stopFly(true)
+flyOn=true
+local uis=game:GetService("UserInputService")
+if not uis.TouchEnabled then
+pcall(function() h.PlatformStand=true end)
+end
+flyBV=Instance.new("BodyVelocity")
+flyBV.MaxForce=Vector3.new(100000,100000,100000)
+flyBV.P=1250
+flyBV.Velocity=Vector3.new(0,0,0)
+flyBV.Parent=hrp
+flyBG=Instance.new("BodyGyro")
+flyBG.MaxTorque=Vector3.new(100000,100000,100000)
+flyBG.P=3000
+flyBG.D=100
+flyBG.CFrame=hrp.CFrame
+flyBG.Parent=hrp
+buildFlyPad().Enabled=true
+flyConn=game:GetService("RunService").RenderStepped:Connect(function()
+local ch=LP.Character
+local root=ch and ch:FindFirstChild("HumanoidRootPart")
+local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+if not root or not flyBV or not flyBG or not flyOn then return end
+local cam=workspace.CurrentCamera
+local dir=Vector3.new(0,0,0)
+if uis:GetFocusedTextBox()==nil then
+if uis:IsKeyDown(Enum.KeyCode.W) then dir=dir+cam.CFrame.LookVector end
+if uis:IsKeyDown(Enum.KeyCode.S) then dir=dir-cam.CFrame.LookVector end
+if uis:IsKeyDown(Enum.KeyCode.D) then dir=dir+cam.CFrame.RightVector end
+if uis:IsKeyDown(Enum.KeyCode.A) then dir=dir-cam.CFrame.RightVector end
+if uis:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
+if uis:IsKeyDown(Enum.KeyCode.LeftControl) or uis:IsKeyDown(Enum.KeyCode.LeftShift) then dir=dir-Vector3.new(0,1,0) end
+end
+-- 手机摇杆（摇杆方向直接当飞行方向）
+if hum and hum.MoveDirection.Magnitude>0.1 then
+dir=dir+hum.MoveDirection
+end
+if flyHoldUp then dir=dir+Vector3.new(0,1,0) end
+if flyHoldDown then dir=dir-Vector3.new(0,1,0) end
+if dir.Magnitude>0 then
+flyBV.Velocity=dir.Unit*flySpeed
+else
+flyBV.Velocity=Vector3.new(0,0,0)
+end
+flyBG.CFrame=cam.CFrame
+end)
+return true
+end
+
+flyToggleRef=T2:Toggle({Title="飞行（F 键开关 · 朝相机方向飞）",Value=false,Callback=function(v)
+if v then
+if not startFly() then
+pcall(function() if flyToggleRef and flyToggleRef.Set then flyToggleRef:Set(false) end end)
+end
+else
+stopFly()
+end
+end})
+T2:Slider({Title="飞行速度",Value={Min=20,Max=300,Default=80},Callback=function(v)
+flySpeed=v
+end})
+T2:Button({Title="飞行 · 上升一点",Callback=function()
+local c=LP.Character
+local hrp=c and c:FindFirstChild("HumanoidRootPart")
+if hrp then hrp.CFrame=hrp.CFrame+Vector3.new(0,3,0) end
+end})
+T2:Button({Title="飞行 · 下降一点",Callback=function()
+local c=LP.Character
+local hrp=c and c:FindFirstChild("HumanoidRootPart")
+if hrp then hrp.CFrame=hrp.CFrame-Vector3.new(0,3,0) end
+end})
+game:GetService("UserInputService").InputBegan:Connect(function(i,gpe)
+if gpe then return end
+if i.KeyCode==Enum.KeyCode.F then
+if flyOn then
+stopFly()
+else
+startFly()
+end
+pcall(function() if flyToggleRef and flyToggleRef.Set then flyToggleRef:Set(flyOn) end end)
+end
+end)
+LP.CharacterAdded:Connect(function()
+if flyOn then
+task.wait(1)
+pcall(function() stopFly(true) end)
+end
+end)
 T2:Section({Title="穿墙设置"})
 local pc={}
 T2:Toggle({Title="穿墙",Value=false,Callback=function(s)
