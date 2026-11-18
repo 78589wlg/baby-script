@@ -1,10 +1,11 @@
 --[[
-    Jandel's Road Trip · 旧服务器传送
+    Jandel's Road Trip · 旧服务器传送  v2
     ------------------------------------------------------------
-    就是一个小面板，点按钮直接传送到各个旧版本 / 老服务器。
-    灵感来源：@jrcrtktjhneleven
-    ------------------------------------------------------------
-    用法：执行即可，面板出现在屏幕右侧，可拖动，手机可点。
+    v2 改动：
+      · 传送失败时把真实错误显示在面板上（方便定位问题）
+      · 先 TeleportAsync 再 Teleport，双通道重试
+      · 每个服务器多一个「复制」按钮，复制游戏链接，传送被拦也能手动进
+      · 列表改为固定画布高度，避免部分执行器不支持自动画布导致按钮不显示
 ]]
 
 local Players = game:GetService("Players")
@@ -16,7 +17,6 @@ local HttpService = game:GetService("HttpService")
 local LP = Players.LocalPlayer
 local UNIVERSE_ID = 5650396773
 
--- 旧服务器列表（全部是同一个 universe 下的老版本 place）
 local PLACES = {
 	{ Name = "圣诞节", PlaceId = 72639813364968 },
 	{ Name = "德比", PlaceId = 18369256317 },
@@ -26,7 +26,6 @@ local PLACES = {
 	{ Name = "怪物卡车（老服务器）", PlaceId = 17527910461 },
 }
 
--- 主游戏 place（运行时自动查，查不到就隐藏返回按钮）
 local rootPlaceId = nil
 task.spawn(function()
 	local ok, res = pcall(function()
@@ -41,16 +40,15 @@ task.spawn(function()
 	end
 end)
 
--- 重复执行时先清掉旧面板
 local old = game:GetService("CoreGui"):FindFirstChild("JandelOldServers")
 if old then old:Destroy() end
 
 local COL_BG      = Color3.fromRGB(16, 18, 24)
-local COL_CARD    = Color3.fromRGB(30, 33, 42)
-local COL_CARD_HL = Color3.fromRGB(42, 46, 58)
+local COL_CARD    = Color3.fromRGB(31, 34, 43)
+local COL_CARD_HL = Color3.fromRGB(44, 48, 60)
 local COL_ACCENT  = Color3.fromRGB(245, 166, 35)
 local COL_TEXT    = Color3.fromRGB(240, 242, 248)
-local COL_SUB     = Color3.fromRGB(150, 156, 170)
+local COL_SUB     = Color3.fromRGB(152, 158, 172)
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "JandelOldServers"
@@ -59,35 +57,33 @@ gui.IgnoreGuiInset = true
 gui.DisplayOrder = 999
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 do
-	local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
-	if not ok or not gui.Parent then gui.Parent = LP:WaitForChild("PlayerGui") end
+	pcall(function() gui.Parent = game:GetService("CoreGui") end)
+	if not gui.Parent then gui.Parent = LP:WaitForChild("PlayerGui") end
 end
 
--- ===== 主窗口 =====
+local ROW_H, ROW_GAP = 54, 8
+
 local win = Instance.new("Frame")
-win.Name = "Window"
-win.Size = UDim2.new(0, 320, 0, 448)
-win.Position = UDim2.new(1, -340, 0.5, -224)
+win.Size = UDim2.new(0, 330, 0, 486)
+win.Position = UDim2.new(1, -350, 0.5, -243)
 win.BackgroundColor3 = COL_BG
 win.BorderSizePixel = 0
 win.ClipsDescendants = true
 win.Active = true
 win.Parent = gui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 14)
-corner.Parent = win
+local winCorner = Instance.new("UICorner")
+winCorner.CornerRadius = UDim.new(0, 14)
+winCorner.Parent = win
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(60, 64, 78)
-stroke.Thickness = 1
-stroke.Parent = win
+local winStroke = Instance.new("UIStroke")
+winStroke.Color = Color3.fromRGB(60, 64, 78)
+winStroke.Thickness = 1
+winStroke.Parent = win
 
--- ===== 标题栏 =====
 local bar = Instance.new("Frame")
-bar.Name = "TitleBar"
 bar.Size = UDim2.new(1, 0, 0, 64)
-bar.BackgroundColor3 = Color3.fromRGB(20, 23, 30)
+bar.BackgroundColor3 = Color3.fromRGB(21, 24, 32)
 bar.BorderSizePixel = 0
 bar.Parent = win
 
@@ -98,20 +94,20 @@ barCorner.Parent = bar
 local barFix = Instance.new("Frame")
 barFix.Size = UDim2.new(1, 0, 0, 14)
 barFix.Position = UDim2.new(0, 0, 1, -14)
-barFix.BackgroundColor3 = Color3.fromRGB(20, 23, 30)
+barFix.BackgroundColor3 = Color3.fromRGB(21, 24, 32)
 barFix.BorderSizePixel = 0
 barFix.Parent = bar
 
-local accentBar = Instance.new("Frame")
-accentBar.Size = UDim2.new(0, 4, 0, 26)
-accentBar.Position = UDim2.new(0, 16, 0, 19)
-accentBar.BackgroundColor3 = COL_ACCENT
-accentBar.BorderSizePixel = 0
-accentBar.Parent = bar
+local accent = Instance.new("Frame")
+accent.Size = UDim2.new(0, 4, 0, 26)
+accent.Position = UDim2.new(0, 16, 0, 19)
+accent.BackgroundColor3 = COL_ACCENT
+accent.BorderSizePixel = 0
+accent.Parent = bar
 
-local ac = Instance.new("UICorner")
-ac.CornerRadius = UDim.new(1, 0)
-ac.Parent = accentBar
+local accentC = Instance.new("UICorner")
+accentC.CornerRadius = UDim.new(1, 0)
+accentC.Parent = accent
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -60, 0, 20)
@@ -135,11 +131,10 @@ subtitle.Font = Enum.Font.Gotham
 subtitle.TextXAlignment = Enum.TextXAlignment.Left
 subtitle.Parent = bar
 
--- 折叠按钮
 local foldBtn = Instance.new("TextButton")
 foldBtn.Size = UDim2.new(0, 30, 0, 30)
 foldBtn.Position = UDim2.new(1, -42, 0, 17)
-foldBtn.BackgroundColor3 = Color3.fromRGB(34, 38, 48)
+foldBtn.BackgroundColor3 = Color3.fromRGB(36, 40, 50)
 foldBtn.Text = "−"
 foldBtn.TextColor3 = COL_TEXT
 foldBtn.TextSize = 18
@@ -147,80 +142,77 @@ foldBtn.Font = Enum.Font.GothamBold
 foldBtn.AutoButtonColor = false
 foldBtn.Parent = bar
 
-local fc = Instance.new("UICorner")
-fc.CornerRadius = UDim.new(0, 8)
-fc.Parent = foldBtn
+local foldC = Instance.new("UICorner")
+foldC.CornerRadius = UDim.new(0, 8)
+foldC.Parent = foldBtn
 
--- ===== 内容区 =====
 local body = Instance.new("Frame")
-body.Name = "Body"
 body.Size = UDim2.new(1, 0, 1, -64)
 body.Position = UDim2.new(0, 0, 0, 64)
 body.BackgroundTransparency = 1
 body.Parent = win
 
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -32, 0, 34)
-statusLabel.Position = UDim2.new(0, 16, 0, 8)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "点击下方按钮传送到老版本"
-statusLabel.TextColor3 = COL_SUB
-statusLabel.TextSize = 12
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.TextWrapped = true
-statusLabel.Parent = body
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -32, 0, 46)
+status.Position = UDim2.new(0, 16, 0, 6)
+status.BackgroundTransparency = 1
+status.Text = "当前 PlaceID：" .. game.PlaceId
+status.TextColor3 = COL_SUB
+status.TextSize = 11
+status.Font = Enum.Font.Gotham
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.TextYAlignment = Enum.TextYAlignment.Top
+status.TextWrapped = true
+status.Parent = body
 
 local list = Instance.new("ScrollingFrame")
-list.Size = UDim2.new(1, -24, 1, -112)
-list.Position = UDim2.new(0, 12, 0, 48)
+list.Size = UDim2.new(1, -24, 1, -64 - 52 - 34)
+list.Position = UDim2.new(0, 12, 0, 56)
 list.BackgroundTransparency = 1
 list.BorderSizePixel = 0
 list.ScrollBarThickness = 3
 list.ScrollBarImageColor3 = Color3.fromRGB(70, 74, 88)
 list.CanvasSize = UDim2.new(0, 0, 0, 0)
-list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 list.Parent = body
 
 local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 8)
+layout.Padding = UDim.new(0, ROW_GAP)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = list
 
 local note = Instance.new("TextLabel")
-note.Size = UDim2.new(1, -32, 0, 40)
-note.Position = UDim2.new(0, 0, 1, -46)
+note.Size = UDim2.new(1, -32, 0, 30)
+note.Position = UDim2.new(0, 0, 1, -34)
 note.BackgroundTransparency = 1
-note.Text = "传送后若卡在加载界面，重新加入游戏即可。\n不同旧服务器进度不互通。"
-note.TextColor3 = Color3.fromRGB(110, 116, 130)
+note.Text = "传送卡加载就重进；各旧服进度不互通"
+note.TextColor3 = Color3.fromRGB(108, 114, 128)
 note.TextSize = 11
 note.Font = Enum.Font.Gotham
 note.TextWrapped = true
 note.TextXAlignment = Enum.TextXAlignment.Center
 note.Parent = body
 
--- ===== 小提示（右下角气泡） =====
+-- ===== 提示气泡 =====
 local toastFrame = Instance.new("Frame")
-toastFrame.Size = UDim2.new(0, 300, 0, 0)
-toastFrame.Position = UDim2.new(0.5, -150, 1, -80)
+toastFrame.Size = UDim2.new(0, 310, 0, 52)
+toastFrame.Position = UDim2.new(0.5, -155, 1, -96)
 toastFrame.BackgroundColor3 = Color3.fromRGB(28, 31, 40)
-toastFrame.BackgroundTransparency = 0
 toastFrame.BorderSizePixel = 0
 toastFrame.Visible = false
 toastFrame.ZIndex = 20
 toastFrame.Parent = gui
 
-local tc = Instance.new("UICorner")
-tc.CornerRadius = UDim.new(0, 10)
-tc.Parent = toastFrame
+local toastC = Instance.new("UICorner")
+toastC.CornerRadius = UDim.new(0, 10)
+toastC.Parent = toastFrame
 
 local toastLabel = Instance.new("TextLabel")
-toastLabel.Size = UDim2.new(1, -24, 1, -16)
-toastLabel.Position = UDim2.new(0, 12, 0, 8)
+toastLabel.Size = UDim2.new(1, -24, 1, -14)
+toastLabel.Position = UDim2.new(0, 12, 0, 7)
 toastLabel.BackgroundTransparency = 1
 toastLabel.Text = ""
 toastLabel.TextColor3 = COL_TEXT
-toastLabel.TextSize = 13
+toastLabel.TextSize = 12
 toastLabel.Font = Enum.Font.Gotham
 toastLabel.TextWrapped = true
 toastLabel.ZIndex = 21
@@ -229,174 +221,242 @@ toastLabel.Parent = toastFrame
 local toastToken = 0
 local function toast(msg)
 	toastToken = toastToken + 1
-	local myToken = toastToken
+	local my = toastToken
 	toastLabel.Text = msg
-	toastFrame.Visible = true
-	toastFrame.Size = UDim2.new(0, 300, 0, 44)
+	toastLabel.TextTransparency = 0
 	toastFrame.BackgroundTransparency = 0
-	task.delay(4, function()
-		if toastToken == myToken then
-			TweenService:Create(toastFrame, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
-			TweenService:Create(toastLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
-			task.wait(0.32)
-			if toastToken == myToken then
-				toastFrame.Visible = false
-				toastLabel.TextTransparency = 0
-			end
+	toastFrame.Visible = true
+	task.delay(6, function()
+		if toastToken ~= my then return end
+		TweenService:Create(toastFrame, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(toastLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+		task.wait(0.32)
+		if toastToken == my then
+			toastFrame.Visible = false
 		end
 	end)
 end
 
--- ===== 按钮 =====
-local busy = false
-
 local function setStatus(text, isError)
-	statusLabel.Text = text
-	statusLabel.TextColor3 = isError and Color3.fromRGB(240, 110, 110) or COL_SUB
+	status.Text = text
+	status.TextColor3 = isError and Color3.fromRGB(240, 105, 105) or COL_SUB
 end
 
+-- ===== 传送 =====
+local busy = false
 local function teleport(placeId, name)
 	if busy then
-		toast("正在传送中，稍等一下…")
+		toast("正在传送中，等一下…")
 		return
 	end
 	if placeId == game.PlaceId then
 		toast("你已经在「" .. name .. "」里了")
 		return
 	end
+	if not placeId or placeId == 0 then
+		toast("这个入口还没查到地址，重新执行脚本试试")
+		return
+	end
 	busy = true
-	setStatus("正在传送到「" .. name .. "」…")
-	toast("正在传送到「" .. name .. "」…")
+	setStatus("正在传送到「" .. name .. "」…\nPlaceID " .. placeId)
+	toast("正在传送… 10 秒没反应就看面板红字")
+
 	task.spawn(function()
-		local ok, err = pcall(function()
-			TeleportService:Teleport(placeId, LP)
+		local errText = nil
+		local okA, errA = pcall(function()
+			TeleportService:TeleportAsync(placeId, { LP })
 		end)
-		if not ok then
-			local ok2 = pcall(function()
-				TeleportService:TeleportAsync(placeId, { LP })
+		if not okA then
+			errText = tostring(errA)
+			local okB, errB = pcall(function()
+				TeleportService:Teleport(placeId, LP)
 			end)
-			if not ok2 then
-				setStatus("传送失败：" .. tostring(err), true)
-				toast("传送失败，重试一次或手动加入")
+			if okB then
+				errText = nil
+			else
+				errText = errText .. " | " .. tostring(errB)
 			end
 		end
-		task.wait(6)
-		busy = false
+
+		task.wait(10)
+		if busy then
+			busy = false
+			setStatus(
+				"传送没有生效。\n"
+					.. "当前 PlaceID：" .. game.PlaceId .. "（要在主游戏里执行）\n"
+					.. "→ 点右边「复制」，用浏览器/Roblox 打开链接手动进"
+					.. (errText and ("\n[报错] " .. errText) or ""),
+				true
+			)
+			toast("传送失败：点「复制」拿链接手动进")
+		end
 	end)
 end
 
-local function makeButton(order, label, subText, color, onClick)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, 0, 0, 50)
-	btn.BackgroundColor3 = COL_CARD
-	btn.BorderSizePixel = 0
-	btn.AutoButtonColor = false
-	btn.Text = ""
-	btn.LayoutOrder = order
-	btn.Parent = list
+-- ===== 复制链接 =====
+local function copyLink(placeId)
+	local link = "https://www.roblox.com/games/" .. placeId
+	local ok = pcall(function()
+		setclipboard(link)
+	end)
+	if ok then
+		toast("已复制：" .. link)
+	else
+		toast("复制失败，手动记下：" .. link)
+	end
+end
 
-	local bc = Instance.new("UICorner")
-	bc.CornerRadius = UDim.new(0, 10)
-	bc.Parent = btn
+-- ===== 列表行 =====
+local function makeRow(order, name, placeId, accentColor, isHere, customAction)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, ROW_H)
+	row.BackgroundColor3 = COL_CARD
+	row.BorderSizePixel = 0
+	row.LayoutOrder = order
+	row.Parent = list
+
+	local rc = Instance.new("UICorner")
+	rc.CornerRadius = UDim.new(0, 10)
+	rc.Parent = row
+
+	local tap = Instance.new("TextButton")
+	tap.Name = "Tap"
+	tap.Size = UDim2.new(1, -70, 1, 0)
+	tap.BackgroundTransparency = 1
+	tap.Text = ""
+	tap.AutoButtonColor = false
+	tap.ZIndex = 2
+	tap.Parent = row
 
 	local left = Instance.new("Frame")
 	left.Size = UDim2.new(0, 3, 0, 20)
 	left.Position = UDim2.new(0, 10, 0.5, -10)
-	left.BackgroundColor3 = color
+	left.BackgroundColor3 = accentColor
 	left.BorderSizePixel = 0
-	left.Parent = btn
+	left.Parent = row
 
 	local lc = Instance.new("UICorner")
 	lc.CornerRadius = UDim.new(1, 0)
 	lc.Parent = left
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -50, 0, 18)
-	nameLabel.Position = UDim2.new(0, 22, 0, 8)
+	nameLabel.Size = UDim2.new(1, -126, 0, 18)
+	nameLabel.Position = UDim2.new(0, 22, 0, 9)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = label
+	nameLabel.Text = (isHere and "● " or "") .. name
 	nameLabel.TextColor3 = COL_TEXT
 	nameLabel.TextSize = 14
 	nameLabel.Font = Enum.Font.GothamMedium
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.Parent = btn
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLabel.Parent = row
 
 	local idLabel = Instance.new("TextLabel")
-	idLabel.Size = UDim2.new(1, -50, 0, 14)
-	idLabel.Position = UDim2.new(0, 22, 0, 27)
+	idLabel.Size = UDim2.new(1, -126, 0, 14)
+	idLabel.Position = UDim2.new(0, 22, 0, 28)
 	idLabel.BackgroundTransparency = 1
-	idLabel.Text = subText
+	idLabel.Text = placeId ~= 0 and ("PlaceID " .. placeId) or "自动查询"
 	idLabel.TextColor3 = COL_SUB
-	idLabel.TextSize = 11
+	idLabel.TextSize = 10
 	idLabel.Font = Enum.Font.Gotham
 	idLabel.TextXAlignment = Enum.TextXAlignment.Left
-	idLabel.Parent = btn
+	idLabel.Parent = row
 
-	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = COL_CARD_HL }):Play()
-	end)
-	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = COL_CARD }):Play()
-	end)
-	btn.Activated:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.08), { BackgroundColor3 = COL_CARD_HL }):Play()
-		task.delay(0.1, function()
-			TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = COL_CARD }):Play()
+	local copyBtn = Instance.new("TextButton")
+	copyBtn.Size = UDim2.new(0, 54, 0, 30)
+	copyBtn.Position = UDim2.new(1, -62, 0.5, -15)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(44, 48, 60)
+	copyBtn.Text = "复制"
+	copyBtn.TextColor3 = COL_SUB
+	copyBtn.TextSize = 12
+	copyBtn.Font = Enum.Font.GothamMedium
+	copyBtn.AutoButtonColor = false
+	copyBtn.ZIndex = 3
+	copyBtn.Parent = row
+
+	local cc = Instance.new("UICorner")
+	cc.CornerRadius = UDim.new(0, 8)
+	cc.Parent = copyBtn
+
+	local lastTap = 0
+	tap.Activated:Connect(function()
+		if os.clock() - lastTap < 0.8 then return end
+		lastTap = os.clock()
+		TweenService:Create(row, TweenInfo.new(0.08), { BackgroundColor3 = COL_CARD_HL }):Play()
+		task.delay(0.12, function()
+			TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = COL_CARD }):Play()
 		end)
-		onClick()
-	end)
-	btn.TouchTap:Connect(function()
-		onClick()
+		if customAction then
+			customAction()
+		else
+			teleport(placeId, name)
+		end
 	end)
 
-	return btn
+	copyBtn.MouseButton1Click:Connect(function()
+		if customAction and placeId == 0 then
+			toast("主游戏地址查询中…")
+			return
+		end
+		copyLink(placeId)
+	end)
+
+	return row, copyBtn, idLabel
 end
 
 for i, p in ipairs(PLACES) do
-	local isHere = (game.PlaceId == p.PlaceId)
-	makeButton(i, (isHere and "● " or "") .. p.Name, "PlaceID " .. p.PlaceId, isHere and COL_ACCENT or Color3.fromRGB(90, 96, 112), function()
-		teleport(p.PlaceId, p.Name)
-	end)
+	makeRow(i, p.Name, p.PlaceId, (game.PlaceId == p.PlaceId) and COL_ACCENT or Color3.fromRGB(92, 98, 114), game.PlaceId == p.PlaceId, nil)
 end
 
--- 返回主游戏（查到 rootPlaceId 才显示）
-local backBtn = makeButton(100, "返回主游戏（当前版本）", "自动查询主服务器…", Color3.fromRGB(110, 200, 140), function()
+local backRow, backCopy, backId = makeRow(100, "返回主游戏（当前版本）", 0, Color3.fromRGB(110, 200, 140), false, function()
 	if rootPlaceId then
 		teleport(rootPlaceId, "主游戏")
 	else
-		toast("暂时查不到主服务器地址，重新执行脚本再试")
+		toast("暂时查不到主游戏地址，稍后再点或重进脚本")
 	end
 end)
 
--- 重进当前服务器
-makeButton(101, "重进当前服务器", "PlaceID " .. game.PlaceId, Color3.fromRGB(120, 150, 230), function()
+makeRow(101, "重进当前服务器", game.PlaceId, Color3.fromRGB(120, 150, 230), true, function()
 	toast("正在重新加入当前服务器…")
-	pcall(function()
-		TeleportService:Teleport(game.PlaceId, LP)
+	task.spawn(function()
+		pcall(function()
+			TeleportService:Teleport(game.PlaceId, LP)
+		end)
 	end)
 end)
 
--- rootPlaceId 查到了就更新返回按钮副标题
+list.CanvasSize = UDim2.new(0, 0, 0, (ROW_H + ROW_GAP) * 8 + 6)
+
+-- 根地址查到了就更新那一行
 task.spawn(function()
-	for _ = 1, 20 do
+	for _ = 1, 30 do
 		if rootPlaceId then
-			local labels = backBtn:GetChildren()
-			for _, child in ipairs(labels) do
-				if child:IsA("TextLabel") and child.TextSize == 11 then
-					child.Text = "PlaceID " .. rootPlaceId
-				end
-			end
-			break
+			backId.Text = "PlaceID " .. rootPlaceId
+			return
 		end
 		task.wait(0.5)
+	end
+	backId.Text = "查询失败（点复制无效）"
+end)
+
+-- ===== 折叠 =====
+local folded = false
+foldBtn.MouseButton1Click:Connect(function()
+	folded = not folded
+	if folded then
+		body.Visible = false
+		TweenService:Create(win, TweenInfo.new(0.18), { Size = UDim2.new(0, 330, 0, 64) }):Play()
+		foldBtn.Text = "+"
+	else
+		TweenService:Create(win, TweenInfo.new(0.18), { Size = UDim2.new(0, 330, 0, 486) }):Play()
+		task.wait(0.1)
+		body.Visible = true
+		foldBtn.Text = "−"
 	end
 end)
 
 -- ===== 拖动 =====
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
+local dragging, dragStart, startPos = false, nil, nil
 bar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
@@ -413,25 +473,7 @@ end)
 UserInputService.InputChanged:Connect(function(input)
 	if not dragging then return end
 	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		local delta = input.Position - dragStart
-		win.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		local d = input.Position - dragStart
+		win.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 	end
 end)
-
--- ===== 折叠 =====
-local folded = false
-foldBtn.Activated:Connect(function()
-	folded = not folded
-	if folded then
-		body.Visible = false
-		TweenService:Create(win, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(0, 320, 0, 64) }):Play()
-		foldBtn.Text = "+"
-	else
-		TweenService:Create(win, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(0, 320, 0, 448) }):Play()
-		task.wait(0.1)
-		body.Visible = true
-		foldBtn.Text = "−"
-	end
-end)
-
-setStatus("当前 PlaceID：" .. game.PlaceId .. "　选一个旧服务器传送")
