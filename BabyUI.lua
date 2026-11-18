@@ -553,14 +553,127 @@ function BabyUI:CreateWindow(opt)
 		shell.Visible = false
 		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的方形按钮可以再打开", Duration = 2 })
 	end)
-	btnClose.Activated:Connect(function()
+	local function hardQuit()
 		-- 关闭 = 退出脚本：停掉渲染循环，整块界面移除
 		dead = true
 		if renderConn then pcall(function() renderConn:Disconnect() end) end
 		pcall(function() ball:Destroy() end)
 		pcall(function() bShadow:Destroy() end)
 		pcall(function() gui:Destroy() end)
-	end)
+	end
+
+	-- 退出前确认框：左边「点错了」/ 右边「退出」
+	local asking = false
+	local function askQuit()
+		if asking or dead then return end
+		asking = true
+
+		local pg = inst("ScreenGui", {
+			Name = "BabyUI_ExitAsk",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+			DisplayOrder = 20000,
+		})
+		local okp = pcall(function() pg.Parent = game:GetService("CoreGui") end)
+		if not okp or not pg.Parent then
+			pcall(function() pg.Parent = LP:WaitForChild("PlayerGui") end)
+		end
+
+		inst("Frame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.44,
+			BorderSizePixel = 0,
+			ZIndex = 1,
+		}, pg)
+
+		local vp = viewport()
+		local bw = math.floor(math.min(320, math.max(262, vp.X - 70)))
+		local bh = 156
+
+		local box = inst("Frame", {
+			Size = UDim2.fromOffset(bw, bh),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.fromRGB(18, 21, 30),
+			BackgroundTransparency = 0.05,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+		}, pg)
+		round(box, 14)
+		gradient(stroke(box, WHT, 0.5, 1.2), 0)
+
+		local bar = inst("Frame", {
+			Size = UDim2.new(0, 3, 0, 15),
+			Position = UDim2.new(0, 16, 0, 18),
+			BackgroundColor3 = WHT,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+		}, box)
+		round(bar, 2)
+
+		mklabel(box, {
+			Size = UDim2.new(1, -34, 0, 20),
+			Position = UDim2.new(0, 26, 0, 16),
+			Text = "是否关闭脚本？",
+			Font = FONTB,
+			TextSize = 15,
+			TextColor3 = WHT,
+			ZIndex = 4,
+		})
+		mklabel(box, {
+			Size = UDim2.new(1, -34, 0, 34),
+			Position = UDim2.new(0, 26, 0, 40),
+			Text = "退出后界面和功能都会停止，要重新执行脚本才能再打开。",
+			TextSize = 12,
+			TextColor3 = SUB,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 4,
+		})
+
+		local bwid = math.floor((bw - 44) / 2)
+		local function mkBtn(text, offX, anchorX, trans, tcol)
+			local b = inst("TextButton", {
+				Size = UDim2.fromOffset(bwid, 38),
+				Position = UDim2.new(0, offX, 1, -50),
+				AnchorPoint = Vector2.new(anchorX, 0),
+				BackgroundColor3 = WHT,
+				BackgroundTransparency = trans,
+				Text = text,
+				Font = FONTB,
+				TextSize = 14,
+				TextColor3 = tcol,
+				AutoButtonColor = false,
+				BorderSizePixel = 0,
+				ZIndex = 4,
+			}, box)
+			round(b, 10)
+			return b
+		end
+
+		local bBack = mkBtn("点错了", 14, 0, 0.9, TXT)
+		stroke(bBack, WHT, 0.75, 1)
+		local bQuit = mkBtn("退出", bw - 14, 1, 0.05, Color3.fromRGB(20, 22, 30))
+
+		bBack.MouseEnter:Connect(function() tweenTo(bBack, { BackgroundTransparency = 0.82 }, 0.14) end)
+		bBack.MouseLeave:Connect(function() tweenTo(bBack, { BackgroundTransparency = 0.90 }, 0.14) end)
+		bQuit.MouseEnter:Connect(function() tweenTo(bQuit, { BackgroundTransparency = 0.00 }, 0.14) end)
+		bQuit.MouseLeave:Connect(function() tweenTo(bQuit, { BackgroundTransparency = 0.05 }, 0.14) end)
+
+		local function closeAsk()
+			asking = false
+			pcall(function() pg:Destroy() end)
+		end
+		bBack.Activated:Connect(closeAsk)
+		bQuit.Activated:Connect(function()
+			closeAsk()
+			hardQuit()
+		end)
+	end
+
+	btnClose.Activated:Connect(askQuit)
 
 	-- 流光动画：渐变旋转 + 轻微呼吸
 	local t = 0
