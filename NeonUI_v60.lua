@@ -572,14 +572,127 @@ function BabyUI:CreateWindow(opt)
 		shell.Visible = false
 		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的方形按钮可以再打开", Duration = 2 })
 	end)
-	btnClose.Activated:Connect(function()
+	local function hardQuit()
 		-- 关闭 = 退出脚本：停掉渲染循环，整块界面移除
 		dead = true
 		if renderConn then pcall(function() renderConn:Disconnect() end) end
 		pcall(function() ball:Destroy() end)
 		pcall(function() bShadow:Destroy() end)
 		pcall(function() gui:Destroy() end)
-	end)
+	end
+
+	-- 退出前确认框：左边「点错了」/ 右边「退出」
+	local asking = false
+	local function askQuit()
+		if asking or dead then return end
+		asking = true
+
+		local pg = inst("ScreenGui", {
+			Name = "BabyUI_ExitAsk",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+			DisplayOrder = 20000,
+		})
+		local okp = pcall(function() pg.Parent = game:GetService("CoreGui") end)
+		if not okp or not pg.Parent then
+			pcall(function() pg.Parent = LP:WaitForChild("PlayerGui") end)
+		end
+
+		inst("Frame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.44,
+			BorderSizePixel = 0,
+			ZIndex = 1,
+		}, pg)
+
+		local vp = viewport()
+		local bw = math.floor(math.min(320, math.max(262, vp.X - 70)))
+		local bh = 156
+
+		local box = inst("Frame", {
+			Size = UDim2.fromOffset(bw, bh),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.fromRGB(18, 21, 30),
+			BackgroundTransparency = 0.05,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+		}, pg)
+		round(box, 14)
+		gradient(stroke(box, WHT, 0.5, 1.2), 0)
+
+		local bar = inst("Frame", {
+			Size = UDim2.new(0, 3, 0, 15),
+			Position = UDim2.new(0, 16, 0, 18),
+			BackgroundColor3 = WHT,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+		}, box)
+		round(bar, 2)
+
+		mklabel(box, {
+			Size = UDim2.new(1, -34, 0, 20),
+			Position = UDim2.new(0, 26, 0, 16),
+			Text = "是否关闭脚本？",
+			Font = FONTB,
+			TextSize = 15,
+			TextColor3 = WHT,
+			ZIndex = 4,
+		})
+		mklabel(box, {
+			Size = UDim2.new(1, -34, 0, 34),
+			Position = UDim2.new(0, 26, 0, 40),
+			Text = "退出后界面和功能都会停止，要重新执行脚本才能再打开。",
+			TextSize = 12,
+			TextColor3 = SUB,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 4,
+		})
+
+		local bwid = math.floor((bw - 44) / 2)
+		local function mkBtn(text, offX, anchorX, trans, tcol)
+			local b = inst("TextButton", {
+				Size = UDim2.fromOffset(bwid, 38),
+				Position = UDim2.new(0, offX, 1, -50),
+				AnchorPoint = Vector2.new(anchorX, 0),
+				BackgroundColor3 = WHT,
+				BackgroundTransparency = trans,
+				Text = text,
+				Font = FONTB,
+				TextSize = 14,
+				TextColor3 = tcol,
+				AutoButtonColor = false,
+				BorderSizePixel = 0,
+				ZIndex = 4,
+			}, box)
+			round(b, 10)
+			return b
+		end
+
+		local bBack = mkBtn("点错了", 14, 0, 0.9, TXT)
+		stroke(bBack, WHT, 0.75, 1)
+		local bQuit = mkBtn("退出", bw - 14, 1, 0.05, Color3.fromRGB(20, 22, 30))
+
+		bBack.MouseEnter:Connect(function() tweenTo(bBack, { BackgroundTransparency = 0.82 }, 0.14) end)
+		bBack.MouseLeave:Connect(function() tweenTo(bBack, { BackgroundTransparency = 0.90 }, 0.14) end)
+		bQuit.MouseEnter:Connect(function() tweenTo(bQuit, { BackgroundTransparency = 0.00 }, 0.14) end)
+		bQuit.MouseLeave:Connect(function() tweenTo(bQuit, { BackgroundTransparency = 0.05 }, 0.14) end)
+
+		local function closeAsk()
+			asking = false
+			pcall(function() pg:Destroy() end)
+		end
+		bBack.Activated:Connect(closeAsk)
+		bQuit.Activated:Connect(function()
+			closeAsk()
+			hardQuit()
+		end)
+	end
+
+	btnClose.Activated:Connect(askQuit)
 
 	-- 流光动画：渐变旋转 + 轻微呼吸
 	local t = 0
@@ -1322,6 +1435,7 @@ function Tab:Dropdown(o)
 end
 
 return BabyUI
+
 ]====]
 local okE,rE=pcall(function()
 return loadstring(EMBED)()
@@ -1352,7 +1466,7 @@ for _,r in ipairs(guiRoots()) do for _,c in ipairs(r:GetChildren()) do GUIO[c]=t
 local Win=WindUI:CreateWindow({Title="婴儿脚本"})
 task.delay(1,function()
 pcall(function()
-WindUI:Notify({Title="界面已就绪",Content="新版玻璃界面（"..UI_SRC.."）",Duration=3})
+WindUI:Notify({Title="欢迎使用婴儿脚本",Content="玻璃界面已就绪（"..UI_SRC.."）· 左边选功能 · − 收起 · × 退出",Duration=4})
 end)
 end)
 local SelfGui
@@ -1362,7 +1476,7 @@ if not GUIO[c] and c:IsA("ScreenGui") then SelfGui=c end
 end
 end
 local ok=false
-local T2,T3,T4,T5
+local T2,T3,T4,T5,T6,T7
 local ntHeartStart
 local G="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/"
 local PM={[537413528]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Boat_v37.lua?v=53",[98502499119821]=G.."Fish_v2.lua",[90148635862803]=G.."Deadly.lua",[107778070777162]=G.."Egg.lua",[79546208627805]=G.."N99.lua",[10165583746]=G.."Examination_zh.lua",[136431686349723]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Pursued.lua?v=5"}
@@ -1388,7 +1502,7 @@ local function ktrim(x)return (tostring(x):gsub("^%s+",""):gsub("%s+$",""))end
 local function doUnlock()
 if done then return end
 done=true
-for _,x in ipairs({T2,T3,T4,T5})do
+for _,x in ipairs({T2,T3,T4,T5,T6,T7})do
 if x then pcall(function()x.Locked=false x:UnlockAll()end)end
 end
 if ntHeartStart then pcall(ntHeartStart) end
@@ -1408,6 +1522,136 @@ pcall(function()WindUI:SetTheme(n)end)
 WindUI:Notify({Title="主题",Content=n,Duration=1})
 end})
 end
+T6=Win:Tab({Title="传送",Icon="arrow"})
+T6:Section({Title="传送到玩家头顶"})
+local tpList={}
+local tpSel=""
+local function refreshTp()
+for i=#tpList,1,-1 do tpList[i]=nil end
+local n=0
+for _,p in ipairs(P:GetPlayers())do
+if p~=LP then n=n+1 tpList[n]=p.Name end
+end
+table.sort(tpList)
+if n==0 then tpList[1]="（暂无其他玩家）" end
+return n
+end
+local tpN=refreshTp()
+tpSel=tpList[1] or ""
+local function tpFind(n)
+for _,p in ipairs(P:GetPlayers())do
+if p.Name==n and p~=LP then return p end
+end
+end
+local function tpTop(n)
+local p=tpFind(n)
+if not p then return false,"先选一个玩家（可以点刷新列表）" end
+local myCh=LP.Character
+local myH=myCh and myCh:FindFirstChildOfClass("Humanoid")
+local myRoot=myCh and myCh:FindFirstChild("HumanoidRootPart")
+if not myRoot or not myH then return false,"你的角色还没加载" end
+if myH.Health<=0 then return false,"你已经死了，等重生" end
+local tCh=p.Character
+local tRoot=tCh and tCh:FindFirstChild("HumanoidRootPart")
+if not tRoot then return false,"对方角色还没加载" end
+myRoot.CFrame=CFrame.new(tRoot.Position+Vector3.new(0,3,0))
+return true
+end
+local tpFollow=false
+local tpConn=nil
+local function tpStopFollow()
+tpFollow=false
+if tpConn then pcall(function()tpConn:Disconnect()end) tpConn=nil end
+end
+local function tpStartFollow()
+tpStopFollow()
+if tpN==0 then return false end
+tpFollow=true
+tpConn=game:GetService("RunService").Heartbeat:Connect(function()
+if not tpFollow then return end
+local okk=tpTop(tpSel)
+if not okk then tpStopFollow() end
+end)
+return true
+end
+T6:Dropdown({Title="选择玩家",Values=tpList,Value=tpSel,Callback=function(v)
+tpSel=v
+end})
+T6:Button({Title="传送到头顶",Callback=function()
+local okk,why=tpTop(tpSel)
+if okk then
+WindUI:Notify({Title="传送",Content="已传送到 "..tostring(tpSel).." 头顶",Duration=2})
+else
+WindUI:Notify({Title="传送",Content=tostring(why),Duration=2})
+end
+end})
+T6:Button({Title="刷新玩家列表",Callback=function()
+tpN=refreshTp()
+tpSel=tpList[1] or ""
+WindUI:Notify({Title="传送",Content=tpN>0 and ("发现 "..tpN.." 个其他玩家") or "目前没有其他玩家",Duration=2})
+end})
+T6:Toggle({Title="持续跟随头顶",Value=false,Callback=function(v)
+if v then
+local okk=tpStartFollow()
+if not okk then WindUI:Notify({Title="传送",Content="没有可以跟随的玩家",Duration=2}) end
+else
+tpStopFollow()
+end
+end})
+
+T7=Win:Tab({Title="旋转",Icon="refresh"})
+T7:Section({Title="角色自转（可以调速度）"})
+local spinOn=false
+local spinSpeed=180
+local spinAtt,spinBv=nil,nil
+local function spinStop()
+if spinBv then pcall(function()spinBv:Destroy()end) spinBv=nil end
+if spinAtt then pcall(function()spinAtt:Destroy()end) spinAtt=nil end
+local ch=LP.Character
+local h=ch and ch:FindFirstChildOfClass("Humanoid")
+if h then pcall(function()h.AutoRotate=true end) end
+end
+local function spinStart()
+spinStop()
+local ch=LP.Character
+local h=ch and ch:FindFirstChildOfClass("Humanoid")
+local root=ch and ch:FindFirstChild("HumanoidRootPart")
+if not root or not h then return false,"角色还没加载" end
+if h.Health<=0 then return false,"你已经死了，等重生" end
+pcall(function()h.AutoRotate=false end)
+local a=Instance.new("Attachment")
+a.Name="BabySpinAtt"
+a.Parent=root
+local b=Instance.new("BodyAngularVelocity")
+b.Name="BabySpin"
+b.Attachment0=a
+b.MaxTorque=Vector3.new(0,1e7,0)
+b.AngularVelocity=Vector3.new(0,math.rad(spinSpeed),0)
+b.Parent=root
+spinAtt,spinBv=a,b
+return true
+end
+T7:Slider({Title="旋转速度（度/秒）",Value={Min=30,Max=900,Default=180},Callback=function(v)
+spinSpeed=v
+if spinBv then pcall(function()spinBv.AngularVelocity=Vector3.new(0,math.rad(v),0)end) end
+end})
+T7:Toggle({Title="开启旋转",Value=false,Callback=function(v)
+spinOn=v
+if v then
+local okk,why=spinStart()
+if not okk then
+spinOn=false
+WindUI:Notify({Title="旋转",Content=tostring(why),Duration=2})
+end
+else
+spinStop()
+end
+end})
+LP.CharacterAdded:Connect(function()
+task.wait(1)
+if spinOn then spinStart() end
+end)
+
 T2=Win:Tab({Title="玩家增强",Icon="user"})
 T2:Section({Title="移动设置"})
 T2:Slider({Title="移动速度",Value={Min=16,Max=500,Default=16},Callback=function(v)
