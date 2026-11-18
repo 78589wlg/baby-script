@@ -2,7 +2,7 @@
 local WindUI
 do
 local okB,B=pcall(function()
-return loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=1"))()
+return loadstring(game:HttpGet("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=2"))()
 end)
 if okB and type(B)=="table" and B.CreateWindow then
 WindUI=B
@@ -49,229 +49,18 @@ local function hum()
 local c=LP.Character
 if c then return c:FindFirstChildOfClass("Humanoid")end
 end
--- 永久卡密（无限期，可无限次使用）
-local PERM={"卡密制作婴儿脚本6767","少羽没面"}
-local KEY=PERM[1]
+-- 卡密验证已拆成独立脚本 BabyKey.lua；主脚本不再校验卡密
 local auto=true
-local done=false
 local AM={[537413528]=1,[98502499119821]=1,[90148635862803]=1,[107778070777162]=1,[79546208627805]=1,[10165583746]=1,[136431686349723]=1}
-
--- ===== 卡密（支持 7 天动态卡 + 老卡密） =====
-local HSK=game:GetService("HttpService")
-local KR="https://raw.githubusercontent.com/78589wlg/baby-script/main/"
-local KSH="https://ae1580126123eca19.app.workbuddy.host"
-local KSS="WGTNFAERQB"
-local KAPI=""
-local kapiLoaded=false
+local done=false
 local function ktrim(x)return (tostring(x):gsub("^%s+",""):gsub("%s+$",""))end
-local function isPerm(k)
-local t=ktrim(k)
-for _,v in ipairs(PERM)do
-if t==v then return true end
-end
-return false
-end
-local function ktoday()local o,d=pcall(function()return os.date("%Y-%m-%d")end)return o and d or "1970-01-01"end
-local function kgetAPI()
-if kapiLoaded then return KAPI end
-kapiLoaded=true
-local okk,txt=pcall(function()return game:HttpGet(KR.."api.txt?t="..tostring(os.time()))end)
-if okk and type(txt)=="string" then
-for line in txt:gmatch("[^\r\n]+")do
-local t=ktrim(line)
-if t~="" and t:sub(1,1)~="#" and t:find("^https?://")then
-KAPI=(t:gsub("/+$",""))
-break
-end
-end
-end
-return KAPI
-end
-local function kexpok(e)
-if not e or e=="" then return true,"永久" end
-local d=tostring(e):gsub("[^%d]","")
-if #d==8 then d=d:sub(1,4).."-"..d:sub(5,6).."-"..d:sub(7,8)end
-if d<ktoday() then return false,d end
-return true,d
-end
-local function keyCheck(k)
-k=ktrim(k)
-if k=="" then return false,"请输入卡密",nil end
-if isPerm(k) then return true,"永久卡密（无限期）",nil end
-local dvo,dvf=pcall(function()return readfile("BabyDevKeys.txt")end)
-if dvo and type(dvf)=="string" then
-for line in dvf:gmatch("[^\r\n]+")do
-local dkk,dee=line:match("^([^,]+),?(.*)$")
-if dkk and ktrim(dkk)==k then
-local o2,e2=kexpok(ktrim(dee))
-if not o2 then return false,"卡密已于 "..e2.." 过期",nil end
-if e2=="永久" or e2=="" then return true,"验证通过（开发者·永久）","永久" end
-return true,"验证通过（开发者·有效期至 "..e2.."）",e2
-end
-end
-end
-local okk,txt=pcall(function()return game:HttpGet(KSH.."/devkeys?sharecode="..KSS.."&t="..tostring(os.time()))end)
-if not okk or type(txt)~="string" or #txt<1 then
-okk,txt=pcall(function()return game:HttpGet(KR.."devkeys.txt?t="..tostring(os.time()))end)
-end
-if okk and type(txt)=="string" then
-for line in txt:gmatch("[^\r\n]+")do
-local ln=ktrim(line)
-if ln~="" and ln:sub(1,1)~="#" then
-local kk,ee=ln:match("^([^,]+),?(.*)$")
-if kk and ktrim(kk)==k then
-local o2,e2=kexpok(ktrim(ee))
-if not o2 then return false,"卡密已于 "..e2.." 过期",nil end
-if e2=="永久" or e2=="" then return true,"验证通过（开发者·永久）","永久" end
-return true,"验证通过（开发者·有效期至 "..e2.."）",e2
-end
-end
-end
-end
-local okk,txt=pcall(function()return game:HttpGet(KR.."keys.txt?t="..tostring(os.time()))end)
-if okk and type(txt)=="string" then
-for line in txt:gmatch("[^\r\n]+")do
-local ln=ktrim(line)
-if ln~="" and ln:sub(1,1)~="#" then
-local kk,ee=ln:match("^([^,]+),?(.*)$")
-if kk and ktrim(kk)==k then
-local o2,e2=kexpok(ktrim(ee))
-if not o2 then return false,"卡密已于 "..e2.." 过期",nil end
-if e2=="永久"then return true,"验证通过（永久）","永久"end
-return true,"验证通过（有效期至 "..e2.."）",e2
-end
-end
-end
-end
-local base=kgetAPI()
-if base=="" then return false,"卡密无效",nil end
-local ok2,res=pcall(function()return game:HttpGet(base.."/verify?key="..k)end)
-if not ok2 or type(res)~="string" or #res<3 then return false,"接口连接失败，请检查网络",nil end
-local okd,d=pcall(function()return HSK:JSONDecode(res)end)
-if not okd or type(d)~="table" then return false,"接口返回异常",nil end
-if not d.ok then return false,tostring(d.msg or "卡密无效"),nil end
-local exp=tostring(d.exp or "")
-if exp=="" then return true,"验证通过",nil end
-return true,"验证通过（有效期至 "..exp.."）",exp
-end
-local function saveShared(k,exp)
-pcall(function()
-if writefile then writefile("BabyKey.txt",ktrim(k).."|"..tostring(exp or "").."|"..tostring(os.time()))end
-end)
-end
--- 读取上次保存的卡密，免重复输入
-local savedK,savedE,savedT="","",0
-pcall(function()
-local f=readfile("BabyKey.txt")
-if type(f)=="string" then
-local a,b,c=f:match("^([^|]+)|([^|\r\n]*)|?([^|\r\n]*)")
-if a then savedK=ktrim(a) savedE=ktrim(b or "") savedT=tonumber(c) or 0 end
-end
-end)
-if savedK~="" then
-local valid=false
-local sawList=false
-if isPerm(savedK) then
-valid=true
-else
--- 检查卡密是否还被保留：本地名单 → 云端名单 → keys.txt → 接口
-local dvo,dvf=pcall(function()return readfile("BabyDevKeys.txt")end)
-if dvo and type(dvf)=="string" then
-for line in dvf:gmatch("[^\r\n]+")do
-local dkk,dee=line:match("^([^,]+),?(.*)$")
-if dkk and ktrim(dkk)==savedK then
-sawList=true
-if kexpok(ktrim(dee))then valid=true end
-end
-end
-end
-if not sawList then
-local okc,ctxt=pcall(function()return game:HttpGet(KSH.."/devkeys?sharecode="..KSS.."&t="..tostring(os.time()))end)
-if not okc or type(ctxt)~="string" then
-okc,ctxt=pcall(function()return game:HttpGet(KR.."devkeys.txt?t="..tostring(os.time()))end)
-end
-if okc and type(ctxt)=="string" and #ctxt>0 then
-sawList=true
-for line in ctxt:gmatch("[^\r\n]+")do
-local kk,ee=line:match("^([^,]+),?(.*)$")
-if kk and ktrim(kk)==savedK then
-if kexpok(ktrim(ee))then valid=true end
-end
-end
-end
-end
-if not sawList then
-local okt,tt=pcall(function()return game:HttpGet(KR.."keys.txt?t="..tostring(os.time()))end)
-if okt and type(tt)=="string" and #tt>0 then
-sawList=true
-for line in tt:gmatch("[^\r\n]+")do
-local ln=ktrim(line)
-if ln~="" and ln:sub(1,1)~="#" then
-local kk,ee=ln:match("^([^,]+),?(.*)$")
-if kk and ktrim(kk)==savedK then
-if kexpok(ktrim(ee))then valid=true end
-end
-end
-end
-end
-end
-if not sawList then
-local base=kgetAPI()
-if base~="" then
-local okv,res=pcall(function()return game:HttpGet(base.."/verify?key="..savedK)end)
-if okv and type(res)=="string" and #res>2 then
-sawList=true
-local okd,d=pcall(function()return HSK:JSONDecode(res)end)
-if okd and type(d)=="table" and d.ok then valid=true end
-end
-end
-end
--- 网络全挂拿不到任何名单时放行，避免误踢
-if not sawList then valid=true end
-end
-if valid then
-ok=true
-else
-ok=false
-savedK="" savedE="" savedT=0
-pcall(function()if writefile then writefile("BabyKey.txt","")end end)
-getgenv().babyKeyDeleted=true
-end
--- 服务器端清除检查：保存时间早于清除点且不是豁免卡密 → 强制重新输入
-if ok then
-local okr,rtxt=pcall(function()return game:HttpGet(KSH.."/keyreset?sharecode="..KSS.."&t="..tostring(os.time()))end)
-if not okr or type(rtxt)~="string" or #rtxt<3 then
-okr,rtxt=pcall(function()return game:HttpGet(KR.."keyreset.txt?t="..tostring(os.time()))end)
-end
-if okr and type(rtxt)=="string" then
-local rt,rk=rtxt:match("^(%d+)|([^|\r\n]*)")
-rt=tonumber(rt)
-if rt and savedT<rt and ktrim(savedK)~=ktrim(rk or "")then
-ok=false
-savedK="" savedE="" savedT=0
-pcall(function()if writefile then writefile("BabyKey.txt","")end end)
-getgenv().babyResetKick=true
-end
-end
-end
-end
-if getgenv().babyKey and isPerm(getgenv().babyKey)then ok=true end
-local function doUnlock(silent)
+local function doUnlock()
 if done then return end
 done=true
 for _,x in ipairs({T2,T3,T4,T5})do
 if x then pcall(function()x.Locked=false x:UnlockAll()end)end
 end
-getgenv().babyKey=KEY
 if ntHeartStart then pcall(ntHeartStart) end
-if silent then
-WindUI:Notify({Title="婴儿脚本",Content="上次的卡密仍然有效，已自动登录",Duration=4})
-else
-WindUI:Notify({Title="婴儿脚本",Content="欢迎你使用婴儿脚本",Duration=3})
-task.wait(1.2)
-WindUI:Notify({Title="婴儿脚本",Content="祝你玩的开心",Duration=3})
-task.wait(1.2)
-end
 if auto and AM[game.PlaceId]then
 WindUI:Notify({Title="自动加载",Content="正在加载副脚本",Duration=3})
 task.wait(1)
@@ -279,43 +68,8 @@ subAuto()
 end
 end
 
-local T1=Win:Tab({Title="卡密验证",Icon="key"})
-T1:Section({Title="请输入卡密（有效期 7 天 / 永久卡无限用）"})
-local keyTxt=ok and savedK or ""
-T1:Input({Title="卡密",Placeholder="BOAT-XXXX-XXXX",Value=keyTxt,Callback=function(t)
-keyTxt=t
-if isPerm(t) then ok=true end
-end})
-T1:Button({Title="验证卡密",Callback=function()
-if done then return end
-local k2=ktrim(keyTxt)
-if k2=="" then WindUI:Notify({Title="失败",Content="请输入卡密",Duration=3})return end
-WindUI:Notify({Title="验证中",Content="正在校验卡密…",Duration=2})
-local kok,kmsg,kexp=keyCheck(k2)
-if not kok then WindUI:Notify({Title="失败",Content=kmsg,Duration=5})return end
-ok=true
-saveShared(k2,kexp or "永久")
-WindUI:Notify({Title="验证通过",Content=kmsg,Duration=4})
-doUnlock(false)
-end})
-T1:Button({Title="忘记卡密？一键找回",Callback=function()
-local k=PERM[1]
-pcall(function()if setclipboard then setclipboard(k)end end)
-if done then
-WindUI:Notify({Title="找回卡密",Content="已解锁中｜永久卡密："..k.."（已复制）",Duration=8})
-return
-end
-WindUI:Notify({Title="找回卡密",Content="永久卡密："..k.."（已自动登录并复制）",Duration=8})
-keyTxt=k
-saveShared(k,"永久")
-ok=true
-doUnlock(false)
-end})
-T1:Button({Title="清除已保存的卡密",Callback=function()
-pcall(function()if delfile then delfile("BabyKey.txt")end end)
-WindUI:Notify({Title="卡密",Content="已清除，下次启动需重新输入",Duration=5})
-end})
-T1:Section({Title="界面配色"})
+local T1=Win:Tab({Title="设置",Icon="settings"})
+T1:Section({Title="界面配色（点一下立刻换色）"})
 for i=1,#th do
 local n=th[i]
 T1:Button({Title=n,Callback=function()
@@ -323,7 +77,7 @@ pcall(function()WindUI:SetTheme(n)end)
 WindUI:Notify({Title="主题",Content=n,Duration=1})
 end})
 end
-T2=Win:Tab({Title="玩家增强",Icon="user",Locked=true})
+T2=Win:Tab({Title="玩家增强",Icon="user"})
 T2:Section({Title="移动设置"})
 T2:Slider({Title="移动速度",Value={Min=16,Max=500,Default=16},Callback=function(v)
 sp=v
@@ -546,7 +300,7 @@ end
 end
 WindUI:Notify({Title="透视",Content=s and "已开启" or "已关闭",Duration=1})
 end})
-T3=Win:Tab({Title="其他脚本",Icon="package",Locked=true})
+T3=Win:Tab({Title="其他脚本",Icon="package"})
 T3:Section({Title="脚本列表"})
 T3:Button({Title="皮脚本",Callback=function()
 getgenv().XiaoPi="皮脚本QQ1002100032"
@@ -566,7 +320,7 @@ end})
 T3:Button({Title="剑球 · Opensurs（60KB 大杂烩）",Callback=function()
 bb3("Opensurs","https://cdn.jsdelivr.net/gh/HOSTI1315/Opensurs@main/bladeball_2.lua")
 end})
-T4=Win:Tab({Title="更多",Locked=true})
+T4=Win:Tab({Title="更多"})
 T4:Section({Title="工具"})
 T4:Button({Title="重生",Callback=function()
 local h=hum()
@@ -1072,7 +826,7 @@ T4:Button({Title="复制QQ号",Callback=function()
 pcall(function()setclipboard("3492202561")end)
 WindUI:Notify({Title="QQ号",Content="3492202561 已复制",Duration=2})
 end})
-T5=Win:Tab({Title="脚本库",Icon="list",Locked=true})
+T5=Win:Tab({Title="脚本库",Icon="list"})
 T5:Section({Title="其他脚本"})
 local sel="造船寻宝"
 local LU={["造船寻宝"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Boat_v37.lua?v=53",["重型钓鱼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Fish_v2.lua",["在末日中生存下来"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Deadly.lua",["偷一个蛋"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Egg.lua",["森林中的99夜"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/N99.lua",["试炼"]="https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/Examination_zh.lua",["战利品"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Loot_v2.lua",["被追捕（HUNTED）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/Pursued.lua?v=5",["Blade Ball（剑球）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/BladeBall.lua?v=17",["监狱人生（Prison Life）"]="https://raw.githubusercontent.com/78589wlg/baby-script/main/PrisonLife.lua?v=2"}
@@ -1095,19 +849,4 @@ h.UseJumpPower=true
 h.JumpPower=jp
 end
 end)
-T2:LockAll()
-T3:LockAll()
-T4:LockAll()
-T5:LockAll()
-
-if getgenv().babyResetKick then
-task.delay(2,function()
-pcall(function()WindUI:Notify({Title="卡密",Content="你的卡密已被开发者清除，请重新输入",Duration=6})end)
-end)
-end
-if getgenv().babyKeyDeleted then
-task.delay(2,function()
-pcall(function()WindUI:Notify({Title="卡密",Content="你的卡密已被开发者删除，已失效，请重新获取卡密",Duration=7})end)
-end)
-end
-if ok then task.defer(doUnlock,true)end
+doUnlock()
