@@ -10,7 +10,7 @@ end)
 if ok and type(r)=="table" and r.CreateWindow then return r end
 return nil
 end
-local B=tryLoad("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=5")
+local B=tryLoad("https://raw.githubusercontent.com/78589wlg/baby-script/main/BabyUI.lua?v=6")
 if B then UI_SRC="远程主源" end
 if not B then
 B=tryLoad("https://cdn.jsdelivr.net/gh/78589wlg/baby-script@main/BabyUI.lua")
