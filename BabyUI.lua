@@ -2,8 +2,8 @@
      BabyUI v1.0  —— 自制轻量 UI 库
      特性：
        · 半透明玻璃窗体（中间透，能看见游戏画面）
-       · 四周彩色流光装饰（彩虹渐变描边 + 外发光，持续旋转）
-       · 可缩成一个圆形悬浮球，点一下展开
+       · 四周彩色流光装饰（内圈彩虹描边持续旋转）
+       · 可缩成一个方形玻璃按钮，点一下展开
        · 兼容 WindUI 常用 API：CreateWindow / Tab / Section
          / Button / Toggle / Slider / Input / Dropdown
          / LockAll / UnlockAll / Notify / SetTheme
@@ -278,38 +278,12 @@ function BabyUI:CreateWindow(opt)
 
 	local shell = inst("Frame", {
 		Name = "Shell",
-		Size = UDim2.fromOffset(W + 60, H + 60),
+		Size = UDim2.fromOffset(W + 24, H + 24),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, gui)
-
-	-- 外发光 1（更粗更淡）
-	local halo1 = inst("Frame", {
-		Size = UDim2.new(1, -26, 1, -26),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 1,
-	}, shell)
-	round(halo1, 26)
-	local hs1 = stroke(halo1, WHT, 0.86, 12)
-	local hg1 = gradient(hs1, 0)
-
-	-- 外发光 2（更亮）
-	local halo2 = inst("Frame", {
-		Size = UDim2.new(1, -40, 1, -40),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 1,
-	}, shell)
-	round(halo2, 20)
-	local hs2 = stroke(halo2, WHT, 0.62, 4)
-	local hg2 = gradient(hs2, 0)
 
 	-- 窗体（半透明，能看见游戏）
 	local root = inst("Frame", {
@@ -459,31 +433,84 @@ function BabyUI:CreateWindow(opt)
 		end
 	end)
 
-	-- ===== 悬浮球 =====
+	-- ===== 收起按钮（方形玻璃砖：投影 + 彩色描边 + 内圈细边 + 顶部高光）=====
+	local bShadow = inst("Frame", {
+		Name = "BallShadow",
+		Size = UDim2.fromOffset(58, 58),
+		Position = UDim2.new(1, -72, 0, 264),
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.66,
+		BorderSizePixel = 0,
+		ZIndex = 48,
+	}, gui)
+	round(bShadow, 18)
+
 	local ball = inst("TextButton", {
 		Name = "Ball",
 		Size = UDim2.fromOffset(54, 54),
-		Position = UDim2.new(1, -68, 0, 260),
-		BackgroundColor3 = WHT,
-		BackgroundTransparency = 0.05,
+		Position = UDim2.new(1, -70, 0, 262),
+		BackgroundColor3 = Color3.fromRGB(17, 21, 33),
+		BackgroundTransparency = 0.08,
 		Text = "",
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
 		ZIndex = 50,
 	}, gui)
-	round(ball, 999)
-	local bg = gradient(ball, 0)
-	local ballStroke = stroke(ball, WHT, 0.55, 1.5)
-	gradient(ballStroke, 0)
+	round(ball, 15)
+
+	-- 暗玻璃底：极淡的斜向冷暖过渡，有质感但不抢眼
+	local bgrad = Instance.new("UIGradient")
+	bgrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 34, 52)),
+		ColorSequenceKeypoint.new(0.52, Color3.fromRGB(17, 21, 33)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(33, 26, 46)),
+	})
+	bgrad.Rotation = 135
+	bgrad.Parent = ball
+
+	-- 外圈：缓慢旋转的彩色细边
+	local bstroke = stroke(ball, WHT, 0.10, 2)
+	local bstrokeGrad = gradient(bstroke, 0)
+
+	-- 内圈：1px 细白边，双层边让边缘更利落
+	local bInner = inst("Frame", {
+		Size = UDim2.new(1, -7, 1, -7),
+		Position = UDim2.new(0, 3.5, 0, 3.5),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 51,
+	}, ball)
+	round(bInner, 12)
+	local bInnerStroke = stroke(bInner, WHT, 0.86, 1)
+
+	-- 顶部高光条：玻璃反光
+	local bGloss = inst("Frame", {
+		Size = UDim2.new(1, -18, 0, 1),
+		Position = UDim2.new(0, 9, 0, 6),
+		BackgroundColor3 = WHT,
+		BackgroundTransparency = 0.52,
+		BorderSizePixel = 0,
+		ZIndex = 52,
+	}, ball)
+	round(bGloss, 1)
+
 	mklabel(ball, {
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = "婴",
 		Font = FONTB,
-		TextSize = 22,
+		TextSize = 21,
 		TextColor3 = WHT,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 51,
+		ZIndex = 53,
 	})
+
+	-- 悬停/按下的一点反馈
+	ball.MouseEnter:Connect(function()
+		tweenTo(ball, { BackgroundTransparency = 0.0 }, 0.14)
+	end)
+	ball.MouseLeave:Connect(function()
+		tweenTo(ball, { BackgroundTransparency = 0.08 }, 0.14)
+	end)
 
 	local ballDrag = false
 	local ballMoved = false
@@ -509,6 +536,7 @@ function BabyUI:CreateWindow(opt)
 			ballOrigin.X.Scale, ballOrigin.X.Offset + d.X,
 			ballOrigin.Y.Scale, ballOrigin.Y.Offset + d.Y
 		)
+		bShadow.Position = UDim2.new(0, ball.Position.X.Offset - 2, 0, ball.Position.Y.Offset + 2)
 	end)
 	UIS.InputEnded:Connect(function(input)
 		if not ballDrag then return end
@@ -519,7 +547,7 @@ function BabyUI:CreateWindow(opt)
 				shell.Visible = vis
 				ball.Text = ""
 				if vis then
-					shell.Size = UDim2.fromOffset(W + 60, H + 60)
+					shell.Size = UDim2.fromOffset(W + 24, H + 24)
 				end
 			end
 			ballDrag = false
@@ -528,7 +556,7 @@ function BabyUI:CreateWindow(opt)
 
 	btnMin.Activated:Connect(function()
 		shell.Visible = false
-		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的圆形按钮可以再打开", Duration = 2 })
+		BabyUI:Notify({ Title = "已收起", Content = "点屏幕上的方形按钮可以再打开", Duration = 2 })
 	end)
 	btnClose.Activated:Connect(function()
 		shell.Visible = false
@@ -536,15 +564,15 @@ function BabyUI:CreateWindow(opt)
 
 	-- 流光动画：渐变旋转 + 轻微呼吸
 	local t = 0
+	local brot = 0
 	RS.RenderStepped:Connect(function(dt)
 		t = t + dt
 		local rot = (t * 26) % 360
-		hg1.Rotation = rot
-		hg2.Rotation = -rot * 1.4
 		rg1.Rotation = rot * 0.8
-		local pulse = 0.62 + math.sin(t * 1.8) * 0.12
-		hs2.Transparency = pulse
-		hs1.Transparency = pulse + 0.22
+		rg1.Transparency = 0.20 + math.sin(t * 1.8) * 0.08
+		brot = (brot + dt * 30) % 360
+		if bstrokeGrad then bstrokeGrad.Rotation = brot end
+		if bgrad then bgrad.Rotation = 135 + math.sin(t * 0.6) * 18 end
 	end)
 
 	-- ===== Tab 方法 =====
