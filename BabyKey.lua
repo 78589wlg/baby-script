@@ -95,7 +95,7 @@ if not gui.Parent then gui.Parent = LP:WaitForChild("PlayerGui") end
 
 local panel = inst("Frame", {
 	Name = "Panel",
-	Size = UDim2.fromOffset(340, 198),
+	Size = UDim2.fromOffset(340, 212),
 	Position = UDim2.new(0.5, 0, 0, 104),
 	AnchorPoint = Vector2.new(0.5, 0),
 	BackgroundColor3 = Color3.fromRGB(15, 18, 29),
@@ -218,8 +218,8 @@ local btnOk  = mkBtn("确认", 176, true)
 
 -- 状态文字
 local status = label(panel, {
-	Size = UDim2.new(1, -40, 0, 34),
-	Position = UDim2.new(0, 20, 0, 158),
+	Size = UDim2.new(1, -40, 0, 48),
+	Position = UDim2.new(0, 20, 0, 157),
 	Text = "",
 	TextSize = 11.5,
 	TextColor3 = SUB,
