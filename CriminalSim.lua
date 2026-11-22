@@ -88,9 +88,9 @@ local state = {
 	autoZip = false, zipDist = 26,
 	aim = false, noSpread = false, freecam = false,
 	grabNear = false, grabRange = 60,
-	autoTp = false, tpDelay = 1,
-	collectAll = false,
-	aura = false, auraRange = 22, auraDelay = 0.25,
+	autoTp = false, tpDelay = 1, collectAll = false, collectLeft = 0,
+	preferValue = true, minValue = 0,
+	aura = false, auraRange = 22, auraDelay = 0.25, auraFace = true,
 }
 
 local hlStore = {}    -- [instance] = {hl=, bb=, kind=}
@@ -123,6 +123,20 @@ local function itemValue(m)
 	if typeof(v) == "number" and v > 0 then return v end
 	local fv = m:GetAttribute("FreeValue")
 	if typeof(fv) == "number" and fv > 0 then return fv end
+	for _, k in ipairs({ "Worth", "Price", "Money", "Amount", "Cash", "Reward" }) do
+		local a = m:GetAttribute(k)
+		if typeof(a) == "number" and a > 0 then return a end
+	end
+	for _, d in ipairs(m:GetChildren()) do
+		if d:IsA("NumberValue") or d:IsA("IntValue") then
+			local n = string.lower(tostring(d.Name))
+			if n:find("value") or n:find("worth") or n:find("price") then
+				if d.Value > 0 then return d.Value end
+			end
+		end
+	end
+	local num = tostring(m.Name):match("(%d+)")
+	if num and tonumber(num) then return tonumber(num) end
 	return 0
 end
 
@@ -463,6 +477,7 @@ local function zipTry(p)
 			p.HoldDuration = 0
 			p.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
 		end
+		if type(fireproximityprompt) == "function" then pcall(fireproximityprompt, p) end
 		p:InputHoldBegin()
 	end)
 	task.defer(function()
@@ -494,57 +509,128 @@ function zipStop()
 end
 
 -- ---------- 自动拾取（抓取物品） ----------
-local grabPrompts = {}
 local grabFired = {}
+local grabTries = {}
+local grabCache = { t = -99, list = {} }
 
-local function isGrabPrompt(p)
+local function promptLooksLoot(p)
 	local n = string.lower(tostring(p.Name))
-	if n:find("zip") then return false end
-	return n:find("grab") or n:find("pick") or n:find("take")
-		or n:find("loot") or n:find("collect") or n:find("steal") or n:find("stash")
+	if n:find("zip") or n:find("tie") then return false end
+	local pn = p.Parent and tostring(p.Parent.Name) or ""
+	if LOOT_NAMES[pn] then return true end
+	if p.Parent and itemValue(p.Parent) > 0 then return true end
+	return (n:find("grab") or n:find("pick") or n:find("take") or n:find("loot")
+		or n:find("collect") or n:find("steal") or n:find("stash") or n:find("carry")
+		or n:find("equip") or n:find("interact") or n:find("open") or n:find("money")) ~= nil
 end
 
-local function collectGrabPrompts()
-	grabPrompts = {}
-	local base = lootFolder() or WS
-	for _, d in ipairs(base:GetDescendants()) do
-		if d:IsA("ProximityPrompt") and isGrabPrompt(d) then
-			grabPrompts[#grabPrompts + 1] = d
+local function firstOfClass(obj, cls)
+	for _, d in ipairs(obj:GetDescendants()) do
+		if d:IsA(cls) then return d end
+	end
+	return nil
+end
+
+-- 扫描全部可拾取目标（不靠猜名字：Loot 文件夹里的东西无条件收）
+local function grabCandidates()
+	local out = {}
+	local seen = {}
+	local r = root()
+	local pos = r and r.Position or Vector3.new()
+	local function push(obj, prompt, cd)
+		if not obj or seen[obj] then return end
+		if inAnyCharacter(obj) then return end
+		local part = partOf(obj)
+		if not part then return end
+		seen[obj] = true
+		out[#out + 1] = {
+			obj = obj, part = part, prompt = prompt, cd = cd,
+			value = itemValue(obj), label = itemLabel(obj),
+			dist = (part.Position - pos).Magnitude,
+		}
+	end
+	local f = lootFolder()
+	if f then
+		for _, c in ipairs(f:GetChildren()) do
+			if c:IsA("Model") or c:IsA("BasePart") then
+				push(c, firstOfClass(c, "ProximityPrompt"), firstOfClass(c, "ClickDetector"))
+			end
 		end
 	end
+	for _, d in ipairs(WS:GetDescendants()) do
+		if d:IsA("ProximityPrompt") and d.Parent and promptLooksLoot(d) then
+			push(d.Parent, d, nil)
+		end
+	end
+	for _, d in ipairs(WS:GetDescendants()) do
+		if d:IsA("ClickDetector") and d.Parent and (d.Parent:IsA("Model") or d.Parent:IsA("BasePart")) then
+			if not inAnyCharacter(d.Parent) then push(d.Parent, nil, d) end
+		end
+	end
+	table.sort(out, function(a, b)
+		if state.preferValue and a.value ~= b.value then return a.value > b.value end
+		return a.dist < b.dist
+	end)
+	return out
 end
 
-local function grabFire(p, dist)
-	if not p or not p.Parent or not p.Enabled then return false end
-	pcall(function()
-		if p.MaxActivationDistance < dist then p.MaxActivationDistance = dist end
-		p.RequiresLineOfSight = false
-		p.HoldDuration = 0
-	end)
-	pcall(function() p:InputHoldBegin() end)
-	task.defer(function()
-		if p and p.Parent then pcall(function() p:InputHoldEnd() end) end
-	end)
-	return true
+local function grabList(force)
+	if force or os.clock() - grabCache.t > 0.7 then
+		grabCache.t = os.clock()
+		grabCache.list = grabCandidates()
+	end
+	return grabCache.list
 end
 
-local function grabRangeOnce(dist, useClock)
-	local r = root()
-	if not r then return 0 end
-	local pos = r.Position
+-- 真正触发拾取：三种方式一起上（执行器远程函数 / 按键按住 / 点击）
+local function grabFire(t, dist, allowTp)
+	if not t then return false end
+	local p, cd = t.prompt, t.cd
+	local fired = false
+	if p and p.Parent and p.Enabled ~= false then
+		pcall(function()
+			if p.MaxActivationDistance < dist then p.MaxActivationDistance = dist end
+			p.RequiresLineOfSight = false
+			p.HoldDuration = 0
+			p.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
+		end)
+		if type(fireproximityprompt) == "function" then
+			pcall(fireproximityprompt, p)
+			fired = true
+		end
+		pcall(function() p:InputHoldBegin() end)
+		task.delay(0.1, function()
+			if p and p.Parent then pcall(function() p:InputHoldEnd() end) end
+		end)
+		fired = true
+	end
+	if cd and cd.Parent then
+		pcall(function() cd.MaxActivationDistance = math.max(cd.MaxActivationDistance, dist) end)
+		if type(fireclickdetector) == "function" then pcall(fireclickdetector, cd) end
+		fired = true
+	end
+	-- 没有拾取点：只能靠贴过去触发（Touched / 自动拾取）
+	if not fired and allowTp then
+		local r = root()
+		if r and t.part then
+			pcall(function() r.CFrame = CFrame.new(t.part.Position + Vector3.new(0, 3, 0)) end)
+			fired = true
+		end
+	end
+	return fired
+end
+
+local function grabTick(dist)
 	local n = 0
-	for _, p in ipairs(grabPrompts) do
-		if p and p.Parent and p.Enabled then
-			local obj = p.Parent
-			local part = obj and partOf(obj)
-			if part then
-				local d = (part.Position - pos).Magnitude
-				if d <= dist then
-					local last = grabFired[p] or 0
-					if os.clock() - last >= 0.3 then
-						grabFired[p] = os.clock()
-						if grabFire(p, dist) then n = n + 1 end
-					end
+	for _, t in ipairs(grabList()) do
+		if t.dist <= dist then
+			local last = grabFired[t.obj] or 0
+			local tries = grabTries[t.obj] or 0
+			if tries < 3 and os.clock() - last >= 0.4 then
+				grabFired[t.obj] = os.clock()
+				if grabFire(t, dist, false) then
+					n = n + 1
+					grabTries[t.obj] = tries + 1
 				end
 			end
 		end
@@ -552,83 +638,74 @@ local function grabRangeOnce(dist, useClock)
 	return n
 end
 
--- 自动拾取循环（范围内抓取 / 自动传送过去拾取 / 一键全图收集）
-task.spawn(function()
-	local cacheTime = 0
-	while true do
-		task.wait(0.15)
-		local active = state.grabNear or state.autoTp or state.collectAll
-		if active then
-			local now = os.clock()
-			if now - cacheTime >= 2 then
-				cacheTime = now
-				pcall(collectGrabPrompts)
-			end
-			local r = root()
-			if r then
-				if state.collectAll then
-					pcall(function()
-						local f = lootFolder()
-						if f then
-							local list = {}
-							for _, c in ipairs(f:GetChildren()) do
-								local part = partOf(c)
-								if part then list[#list + 1] = part end
-							end
-							for i, part in ipairs(list) do
-								if not state.collectAll then break end
-								if i > 80 then break end
-								local r2 = root()
-								if not r2 then break end
-								local d = (part.Position - r2.Position).Magnitude
-								if d > 3 then
-									pcall(function() r2.CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0)) end)
-									task.wait(0.35)
-								end
-								pcall(collectGrabPrompts)
-								grabRangeOnce(18, true)
-								task.wait(0.25)
-							end
-						end
-					end)
-					state.collectAll = false
-					WindUI:Notify({Title = "自动拾取", Content = "一键收集结束", Duration = 3})
-				elseif state.autoTp then
-					local f0 = lootFolder()
-					local nearestPos, nearestD = nil, math.huge
-					if f0 then
-						for _, c in ipairs(f0:GetChildren()) do
-							local part0 = partOf(c)
-							if part0 then
-								local d0 = (part0.Position - r.Position).Magnitude
-								if d0 < nearestD then nearestPos, nearestD = part0.Position, d0 end
-							end
-						end
-					end
-					if nearestPos then
-						pcall(function() r.CFrame = CFrame.new(nearestPos + Vector3.new(0, 3, 0)) end)
-						task.wait(0.3)
-						pcall(collectGrabPrompts)
-						grabRangeOnce(math.max(state.grabRange, 25), true)
-					end
-				elseif state.grabNear then
-					grabRangeOnce(state.grabRange, true)
-				end
-			else
-				task.wait(0.4)
-			end
-			if state.autoTp and state.tpDelay > 0.2 then
-				task.wait(state.tpDelay)
+-- 按「价值优先」挑一个目标
+local function pickBest(list)
+	for _, t in ipairs(list) do
+		if t.obj and t.obj.Parent then
+			local tries = grabTries[t.obj] or 0
+			if tries < 3 and t.value >= state.minValue then
+				return t
 			end
 		end
 	end
-end)
+	return nil
+end
+
+-- 主循环：自动抓取 / 自动传送拾取 / 一键收集
+local grabRunning = false
+local function grabLoop()
+	if grabRunning then return end
+	grabRunning = true
+	task.spawn(function()
+		local nextReset = os.clock() + 60
+		while grabRunning do
+			if not (state.grabNear or state.autoTp or state.collectAll) then
+				grabRunning = false
+				break
+			end
+			if os.clock() >= nextReset then
+				nextReset = os.clock() + 60
+				grabTries = {}
+			end
+			local r = root()
+			if not r then
+				task.wait(0.5)
+			elseif state.autoTp or state.collectAll then
+				if state.collectAll and (state.collectLeft or 0) <= 0 then
+					state.collectAll = false
+					pcall(function()
+						WindUI:Notify({ Title = "自动拾取", Content = "一键收集结束", Duration = 3 })
+					end)
+				else
+					local t = pickBest(grabList())
+					if not t then
+						task.wait(0.8)
+					else
+						if t.dist > 4 then
+							pcall(function() r.CFrame = CFrame.new(t.part.Position + Vector3.new(0, 3.5, 0)) end)
+							task.wait(0.35)
+						end
+						grabFire(t, math.max(state.grabRange, 25), true)
+						grabFired[t.obj] = os.clock()
+						grabTries[t.obj] = (grabTries[t.obj] or 0) + 1
+						if state.collectAll then state.collectLeft = (state.collectLeft or 0) - 1 end
+						task.wait(math.max(0.3, state.tpDelay))
+					end
+				end
+			else
+				grabTick(state.grabRange)
+				task.wait(0.3)
+			end
+		end
+		grabRunning = false
+	end)
+end
 
 -- ---------- 范围攻击（Knockout Aura） ----------
 local auraTargets = { cop = true, guard = true, npc = true, dog = true }
 
 local function findHitRemote()
-	local remotes = RS:FindFirstChild("Remotes")
+	local remotes = RS:FindFirstChild("Remotes") or WS:FindFirstChild("Remotes")
 	if not remotes then return nil end
 	for _, c in ipairs(remotes:GetChildren()) do
 		local n = string.lower(tostring(c.Name))
@@ -639,29 +716,69 @@ local function findHitRemote()
 	return nil
 end
 
+-- 标签找不到时，按「有 Humanoid 且不是玩家」兜底扫全场
+local function scanNpcs()
+	local out = {}
+	for _, d in ipairs(WS:GetChildren()) do
+		if d:IsA("Model") then
+			local hum = d:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 and not inAnyCharacter(d) then
+				out[#out + 1] = d
+			end
+		end
+	end
+	return out
+end
+
 local function auraPick()
 	local r = root()
 	if not r then return nil end
 	local pos = r.Position
 	local best, bestD = nil, state.auraRange
+	local function consider(m)
+		if not m or not m:IsA("Model") or not m:IsDescendantOf(WS) then return end
+		local hum = m:FindFirstChildOfClass("Humanoid")
+		local part = m:FindFirstChild("Head") or partOf(m)
+		if part and hum and hum.Health > 0 then
+			local d = (part.Position - pos).Magnitude
+			if d <= bestD then best, bestD = m, d end
+		end
+	end
 	for _, def in ipairs(NPC_TAGS) do
 		if auraTargets[def.key] then
 			local ok, tagged = pcall(function() return CS:GetTagged(def.tag) end)
 			if ok and tagged then
-				for _, m in ipairs(tagged) do
-					if m:IsA("Model") and m:IsDescendantOf(WS) then
-						local hum = m:FindFirstChildOfClass("Humanoid")
-						local part = m:FindFirstChild("Head") or partOf(m)
-						if part and hum and hum.Health > 0 then
-							local d = (part.Position - pos).Magnitude
-							if d <= bestD then best, bestD = m, d end
-						end
-					end
+				for _, m in ipairs(tagged) do consider(m) end
+			end
+		end
+	end
+	if not best then
+		for _, m in ipairs(scanNpcs()) do consider(m) end
+	end
+	return best, bestD
+end
+
+-- 开火：武器 / 拳头 / 枪械都走这一套
+local function fireWeapon(tool)
+	if tool then
+		pcall(function() tool:Activate() end)
+		for _, d in ipairs(tool:GetDescendants()) do
+			if d:IsA("RemoteEvent") then
+				local n = string.lower(tostring(d.Name))
+				if n:find("hit") or n:find("attack") or n:find("punch") or n:find("fire") or n:find("shoot") then
+					pcall(function() d:FireServer() end)
 				end
 			end
 		end
 	end
-	return best, bestD
+	-- 模拟鼠标左键：枪械、拳头、近战都吃这个
+	pcall(function() mouse1click() end)
+	pcall(function()
+		local vim = game:GetService("VirtualInputManager")
+		vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+		task.wait(0.02)
+		vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+	end)
 end
 
 local function auraAttack()
@@ -670,12 +787,14 @@ local function auraAttack()
 	local r = root()
 	local head = target:FindFirstChild("Head") or partOf(target)
 	if not r or not head then return false end
-	pcall(function()
-		r.CFrame = CFrame.lookAt(r.Position, Vector3.new(head.Position.X, r.Position.Y, head.Position.Z))
-	end)
+	if state.auraFace then
+		pcall(function()
+			r.CFrame = CFrame.lookAt(r.Position, Vector3.new(head.Position.X, r.Position.Y, head.Position.Z))
+		end)
+	end
 	local ch = LP.Character
 	local tool = ch and ch:FindFirstChildOfClass("Tool")
-	if tool then pcall(function() tool:Activate() end) end
+	fireWeapon(tool)
 	local rem = findHitRemote()
 	if rem then
 		pcall(function() rem:FireServer(target) end)
@@ -690,7 +809,6 @@ task.spawn(function()
 		if state.aura then pcall(auraAttack) end
 	end
 end)
-
 
 -- ---------- 静默自瞄 / 去扩散 ----------
 local GunShot, GunFire = nil, nil
@@ -1097,23 +1215,45 @@ T4:Button({Title = "刷新扎带目标", Callback = function()
 end})
 
 local T4B = Win:Tab({Title = "自动拾取", Icon = "package"})
+T4B:Section({Title = "优先拿贵的东西"})
+T4B:Toggle({Title = "按价值从高到低拿", Value = true, Callback = function(v)
+	state.preferValue = v
+end})
+T4B:Slider({Title = "最低价值（0 = 不限）", Value = {Min = 0, Max = 5000, Default = 0}, Callback = function(v)
+	state.minValue = v
+end})
+T4B:Button({Title = "扫描前 8 个最值钱的东西", Callback = function()
+	local list = grabList(true)
+	local lines = {}
+	for i2 = 1, math.min(8, #list) do
+		local t = list[i2]
+		lines[#lines + 1] = i2 .. ". " .. tostring(t.label) .. "  $" .. math.floor(t.value)
+	end
+	if #lines == 0 then
+		WindUI:Notify({Title = "自动拾取", Content = "没扫描到可拾取的东西（可能地图上暂时没有战利品）", Duration = 5})
+	else
+		WindUI:Notify({Title = "自动拾取 · 共 " .. #list .. " 个", Content = table.concat(lines, "｜"), Duration = 8})
+	end
+end})
 T4B:Section({Title = "抓取物品（范围内自动捡，不用走近）"})
 T4B:Toggle({Title = "自动抓取附近物品", Value = false, Callback = function(v)
 	state.grabNear = v
 	if v then
-		collectGrabPrompts()
-		WindUI:Notify({Title = "自动拾取", Content = "已开启，扫描到 " .. #grabPrompts .. " 个拾取点", Duration = 3})
+		local list = grabList(true)
+		WindUI:Notify({Title = "自动拾取", Content = "已开启，范围内发现 " .. #list .. " 个物品", Duration = 3})
+		grabLoop()
 	end
 end})
 T4B:Slider({Title = "抓取范围（格）", Value = {Min = 15, Max = 300, Default = 60}, Callback = function(v)
 	state.grabRange = v
 end})
-T4B:Section({Title = "自动传送物品（自动飘过去把东西捡了）"})
+T4B:Section({Title = "自动传送物品（自动飞过去把东西捡了）"})
 T4B:Toggle({Title = "自动传送到战利品并拾取", Value = false, Callback = function(v)
 	state.autoTp = v
 	if v then
-		collectGrabPrompts()
-		WindUI:Notify({Title = "自动传送", Content = "已开启，会一直飞过去捡最近的物品", Duration = 3})
+		grabList(true)
+		WindUI:Notify({Title = "自动传送", Content = "已开启，会一直飞过去捡最值钱的东西", Duration = 3})
+		grabLoop()
 	end
 end})
 T4B:Slider({Title = "传送间隔（秒）", Value = {Min = 0.3, Max = 5, Default = 1}, Callback = function(v)
@@ -1121,30 +1261,41 @@ T4B:Slider({Title = "传送间隔（秒）", Value = {Min = 0.3, Max = 5, Defaul
 end})
 T4B:Section({Title = "批量"})
 T4B:Button({Title = "一键收集全图（最多 80 个）", Callback = function()
-	collectGrabPrompts()
+	grabList(true)
+	grabTries = {}
+	state.collectLeft = 80
 	state.collectAll = true
-	WindUI:Notify({Title = "自动拾取", Content = "开始一键收集，点下面的按钮可以随时停", Duration = 3})
+	WindUI:Notify({Title = "自动拾取", Content = "开始一键收集，按价值从高到低拿", Duration = 3})
+	grabLoop()
 end})
-T4B:Button({Title = "停止一键收集", Callback = function()
+T4B:Button({Title = "停止一键收集 / 停止自动传送", Callback = function()
 	state.collectAll = false
+	state.autoTp = false
 	WindUI:Notify({Title = "自动拾取", Content = "已停止", Duration = 2})
 end})
-T4B:Button({Title = "刷新拾取点", Callback = function()
-	collectGrabPrompts()
-	WindUI:Notify({Title = "自动拾取", Content = "扫描到 " .. #grabPrompts .. " 个拾取点", Duration = 3})
+T4B:Button({Title = "重新扫描拾取点", Callback = function()
+	grabTries = {}
+	local list = grabList(true)
+	WindUI:Notify({Title = "自动拾取", Content = "扫描到 " .. #list .. " 个物品", Duration = 3})
 end})
+T4B:Paragraph({Title = "捡不起来怎么办", Content = "这个游戏一次只能扛一件东西，手里已经拿着东西时新的捡不起来——先去存掉再开。如果一直提示扫描到 0 个，说明物品的拾取点名字特殊，把靠近物品时屏幕上显示的按键文字告诉作者就能精确匹配。"})
 
 local T5 = Win:Tab({Title = "战斗", Icon = "crosshair"})
-T5:Section({Title = "范围攻击（自动出拳，需要手持拳头或武器）"})
+T5:Section({Title = "范围攻击（拳头、刀、枪都能自动打）"})
 T5:Toggle({Title = "范围攻击（Knockout Aura）", Value = false, Callback = function(v)
 	state.aura = v
 	if v then
 		local ch = LP.Character
 		local tool = ch and ch:FindFirstChildOfClass("Tool")
-		if not tool then
-			WindUI:Notify({Title = "范围攻击", Content = "先拿出拳头/武器再打开，否则打不出伤害", Duration = 4})
+		if tool then
+			WindUI:Notify({Title = "范围攻击", Content = "已开启，当前武器：" .. tostring(tool.Name), Duration = 3})
+		else
+			WindUI:Notify({Title = "范围攻击", Content = "已开启（空手也能打，子弹类武器建议先拿出来）", Duration = 4})
 		end
 	end
+end})
+T5:Toggle({Title = "自动转向目标", Value = true, Callback = function(v)
+	state.auraFace = v
 end})
 T5:Slider({Title = "攻击范围（格）", Value = {Min = 8, Max = 60, Default = 22}, Callback = function(v)
 	state.auraRange = v
@@ -1182,6 +1333,8 @@ T6:Section({Title = "使用提示"})
 T6:Paragraph({Title = "怎么用", Content = "进游戏对局（不在大厅）后再开 ESP，大厅里没有战利品。飞行默认跟着视角走：手机直接拖屏幕转视角就会往前飞；PC 想用 WASD 就把飞行方向切成「WASD 按键」。自由视角点屏幕上的红色按钮退出。"})
 T6:Section({Title = "功能来源"})
 T6:Paragraph({Title = "关于", Content = "ESP / 飞行 / 穿墙 / 自动扎带 / 自瞄 参考社区开源脚本（sega1games12 Hub、Xain01），已统一到婴儿脚本界面；游戏更新后部分功能可能失效。"})
+T6:Section({Title = "最近修复（v3）"})
+T6:Paragraph({Title = "改了什么", Content = "拾取：不再靠猜拾取点名字，改成三路触发（执行器远程函数 + 按住按键 + 点击），Loot 文件夹里的东西无条件收。范围攻击：拳头/近战/枪械统一模拟鼠标左键，工具内部的攻击远程也会自动触发。新增按价值从高到低拾取，可设最低价值门槛。"})
 
 WindUI:Notify({Title = "犯罪模拟器", Content = "脚本已加载，ESP 在「战利品 / NPC 透视」页", Duration = 5})
 
