@@ -87,6 +87,10 @@ local state = {
 	noclip = false, flyJump = false,
 	autoZip = false, zipDist = 26,
 	aim = false, noSpread = false, freecam = false,
+	grabNear = false, grabRange = 60,
+	autoTp = false, tpDelay = 1,
+	collectAll = false,
+	aura = false, auraRange = 22, auraDelay = 0.25,
 }
 
 local hlStore = {}    -- [instance] = {hl=, bb=, kind=}
@@ -488,6 +492,205 @@ end
 function zipStop()
 	if zipConn then pcall(function() zipConn:Disconnect() end) zipConn = nil end
 end
+
+-- ---------- 自动拾取（抓取物品） ----------
+local grabPrompts = {}
+local grabFired = {}
+
+local function isGrabPrompt(p)
+	local n = string.lower(tostring(p.Name))
+	if n:find("zip") then return false end
+	return n:find("grab") or n:find("pick") or n:find("take")
+		or n:find("loot") or n:find("collect") or n:find("steal") or n:find("stash")
+end
+
+local function collectGrabPrompts()
+	grabPrompts = {}
+	local base = lootFolder() or WS
+	for _, d in ipairs(base:GetDescendants()) do
+		if d:IsA("ProximityPrompt") and isGrabPrompt(d) then
+			grabPrompts[#grabPrompts + 1] = d
+		end
+	end
+end
+
+local function grabFire(p, dist)
+	if not p or not p.Parent or not p.Enabled then return false end
+	pcall(function()
+		if p.MaxActivationDistance < dist then p.MaxActivationDistance = dist end
+		p.RequiresLineOfSight = false
+		p.HoldDuration = 0
+	end)
+	pcall(function() p:InputHoldBegin() end)
+	task.defer(function()
+		if p and p.Parent then pcall(function() p:InputHoldEnd() end) end
+	end)
+	return true
+end
+
+local function grabRangeOnce(dist, useClock)
+	local r = root()
+	if not r then return 0 end
+	local pos = r.Position
+	local n = 0
+	for _, p in ipairs(grabPrompts) do
+		if p and p.Parent and p.Enabled then
+			local obj = p.Parent
+			local part = obj and partOf(obj)
+			if part then
+				local d = (part.Position - pos).Magnitude
+				if d <= dist then
+					local last = grabFired[p] or 0
+					if os.clock() - last >= 0.3 then
+						grabFired[p] = os.clock()
+						if grabFire(p, dist) then n = n + 1 end
+					end
+				end
+			end
+		end
+	end
+	return n
+end
+
+-- 自动拾取循环（范围内抓取 / 自动传送过去拾取 / 一键全图收集）
+task.spawn(function()
+	local cacheTime = 0
+	while true do
+		task.wait(0.15)
+		local active = state.grabNear or state.autoTp or state.collectAll
+		if active then
+			local now = os.clock()
+			if now - cacheTime >= 2 then
+				cacheTime = now
+				pcall(collectGrabPrompts)
+			end
+			local r = root()
+			if r then
+				if state.collectAll then
+					pcall(function()
+						local f = lootFolder()
+						if f then
+							local list = {}
+							for _, c in ipairs(f:GetChildren()) do
+								local part = partOf(c)
+								if part then list[#list + 1] = part end
+							end
+							for i, part in ipairs(list) do
+								if not state.collectAll then break end
+								if i > 80 then break end
+								local r2 = root()
+								if not r2 then break end
+								local d = (part.Position - r2.Position).Magnitude
+								if d > 3 then
+									pcall(function() r2.CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0)) end)
+									task.wait(0.35)
+								end
+								pcall(collectGrabPrompts)
+								grabRangeOnce(18, true)
+								task.wait(0.25)
+							end
+						end
+					end)
+					state.collectAll = false
+					WindUI:Notify({Title = "自动拾取", Content = "一键收集结束", Duration = 3})
+				elseif state.autoTp then
+					local f0 = lootFolder()
+					local nearestPos, nearestD = nil, math.huge
+					if f0 then
+						for _, c in ipairs(f0:GetChildren()) do
+							local part0 = partOf(c)
+							if part0 then
+								local d0 = (part0.Position - r.Position).Magnitude
+								if d0 < nearestD then nearestPos, nearestD = part0.Position, d0 end
+							end
+						end
+					end
+					if nearestPos then
+						pcall(function() r.CFrame = CFrame.new(nearestPos + Vector3.new(0, 3, 0)) end)
+						task.wait(0.3)
+						pcall(collectGrabPrompts)
+						grabRangeOnce(math.max(state.grabRange, 25), true)
+					end
+				elseif state.grabNear then
+					grabRangeOnce(state.grabRange, true)
+				end
+			else
+				task.wait(0.4)
+			end
+			if state.autoTp and state.tpDelay > 0.2 then
+				task.wait(state.tpDelay)
+			end
+		end
+	end
+end)
+
+-- ---------- 范围攻击（Knockout Aura） ----------
+local auraTargets = { cop = true, guard = true, npc = true, dog = true }
+
+local function findHitRemote()
+	local remotes = RS:FindFirstChild("Remotes")
+	if not remotes then return nil end
+	for _, c in ipairs(remotes:GetChildren()) do
+		local n = string.lower(tostring(c.Name))
+		if c:IsA("RemoteEvent") and (n:find("punch") or n:find("hit") or n:find("attack") or n:find("knock")) then
+			return c
+		end
+	end
+	return nil
+end
+
+local function auraPick()
+	local r = root()
+	if not r then return nil end
+	local pos = r.Position
+	local best, bestD = nil, state.auraRange
+	for _, def in ipairs(NPC_TAGS) do
+		if auraTargets[def.key] then
+			local ok, tagged = pcall(function() return CS:GetTagged(def.tag) end)
+			if ok and tagged then
+				for _, m in ipairs(tagged) do
+					if m:IsA("Model") and m:IsDescendantOf(WS) then
+						local hum = m:FindFirstChildOfClass("Humanoid")
+						local part = m:FindFirstChild("Head") or partOf(m)
+						if part and hum and hum.Health > 0 then
+							local d = (part.Position - pos).Magnitude
+							if d <= bestD then best, bestD = m, d end
+						end
+					end
+				end
+			end
+		end
+	end
+	return best, bestD
+end
+
+local function auraAttack()
+	local target = auraPick()
+	if not target then return false end
+	local r = root()
+	local head = target:FindFirstChild("Head") or partOf(target)
+	if not r or not head then return false end
+	pcall(function()
+		r.CFrame = CFrame.lookAt(r.Position, Vector3.new(head.Position.X, r.Position.Y, head.Position.Z))
+	end)
+	local ch = LP.Character
+	local tool = ch and ch:FindFirstChildOfClass("Tool")
+	if tool then pcall(function() tool:Activate() end) end
+	local rem = findHitRemote()
+	if rem then
+		pcall(function() rem:FireServer(target) end)
+		pcall(function() rem:FireServer(head) end)
+	end
+	return true
+end
+
+task.spawn(function()
+	while true do
+		task.wait(math.max(0.08, state.auraDelay))
+		if state.aura then pcall(auraAttack) end
+	end
+end)
+
 
 -- ---------- 静默自瞄 / 去扩散 ----------
 local GunShot, GunFire = nil, nil
@@ -893,7 +1096,66 @@ T4:Button({Title = "刷新扎带目标", Callback = function()
 	WindUI:Notify({Title = "扎带", Content = "已扫描到 " .. #zipPrompts .. " 个可扎带目标", Duration = 3})
 end})
 
+local T4B = Win:Tab({Title = "自动拾取", Icon = "package"})
+T4B:Section({Title = "抓取物品（范围内自动捡，不用走近）"})
+T4B:Toggle({Title = "自动抓取附近物品", Value = false, Callback = function(v)
+	state.grabNear = v
+	if v then
+		collectGrabPrompts()
+		WindUI:Notify({Title = "自动拾取", Content = "已开启，扫描到 " .. #grabPrompts .. " 个拾取点", Duration = 3})
+	end
+end})
+T4B:Slider({Title = "抓取范围（格）", Value = {Min = 15, Max = 300, Default = 60}, Callback = function(v)
+	state.grabRange = v
+end})
+T4B:Section({Title = "自动传送物品（自动飘过去把东西捡了）"})
+T4B:Toggle({Title = "自动传送到战利品并拾取", Value = false, Callback = function(v)
+	state.autoTp = v
+	if v then
+		collectGrabPrompts()
+		WindUI:Notify({Title = "自动传送", Content = "已开启，会一直飞过去捡最近的物品", Duration = 3})
+	end
+end})
+T4B:Slider({Title = "传送间隔（秒）", Value = {Min = 0.3, Max = 5, Default = 1}, Callback = function(v)
+	state.tpDelay = v
+end})
+T4B:Section({Title = "批量"})
+T4B:Button({Title = "一键收集全图（最多 80 个）", Callback = function()
+	collectGrabPrompts()
+	state.collectAll = true
+	WindUI:Notify({Title = "自动拾取", Content = "开始一键收集，点下面的按钮可以随时停", Duration = 3})
+end})
+T4B:Button({Title = "停止一键收集", Callback = function()
+	state.collectAll = false
+	WindUI:Notify({Title = "自动拾取", Content = "已停止", Duration = 2})
+end})
+T4B:Button({Title = "刷新拾取点", Callback = function()
+	collectGrabPrompts()
+	WindUI:Notify({Title = "自动拾取", Content = "扫描到 " .. #grabPrompts .. " 个拾取点", Duration = 3})
+end})
+
 local T5 = Win:Tab({Title = "战斗", Icon = "crosshair"})
+T5:Section({Title = "范围攻击（自动出拳，需要手持拳头或武器）"})
+T5:Toggle({Title = "范围攻击（Knockout Aura）", Value = false, Callback = function(v)
+	state.aura = v
+	if v then
+		local ch = LP.Character
+		local tool = ch and ch:FindFirstChildOfClass("Tool")
+		if not tool then
+			WindUI:Notify({Title = "范围攻击", Content = "先拿出拳头/武器再打开，否则打不出伤害", Duration = 4})
+		end
+	end
+end})
+T5:Slider({Title = "攻击范围（格）", Value = {Min = 8, Max = 60, Default = 22}, Callback = function(v)
+	state.auraRange = v
+end})
+T5:Slider({Title = "出拳间隔（秒）", Value = {Min = 0.1, Max = 1.0, Default = 0.25}, Callback = function(v)
+	state.auraDelay = v
+end})
+T5:Toggle({Title = "目标：警察", Value = true, Callback = function(v) auraTargets.cop = v end})
+T5:Toggle({Title = "目标：警卫", Value = true, Callback = function(v) auraTargets.guard = v end})
+T5:Toggle({Title = "目标：平民", Value = true, Callback = function(v) auraTargets.npc = v end})
+T5:Toggle({Title = "目标：狗", Value = false, Callback = function(v) auraTargets.dog = v end})
 T5:Section({Title = "枪械（实验功能，需要执行器支持 hookmetamethod）"})
 T5:Toggle({Title = "静默自瞄（手枪 / AK47）", Value = false, Callback = function(v)
 	state.aim = v
