@@ -1733,6 +1733,8 @@ function X.SavePlot(filename, teamName)
                         blockInfo.Transparency = block.TransparencyModifier.Value
                     elseif block.Name == "GlassBlock" then
                         blockInfo.Transparency = 0.5
+                    elseif PPart.Transparency > 0 then
+                        blockInfo.Transparency = PPart.Transparency
                     end
                     
                     if PPart.Size ~= Vector3.new(2, 2, 2) then
@@ -2572,9 +2574,9 @@ function X.LoadBlocks(blocksData, teamName, keybindsData, connectionsData)
             -- 一律保持锚定，不再解除（复制出来直接散架的修复）
             task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Anchored", {block}, true)
             if data.Transparency and data.Transparency > 0 then
-                local t = math_floor(data.Transparency / 0.25 + 0.5) * 0.25
+                -- 直接用保存的真实透明度（保留两位小数，不取整档位）
+                local t = math_floor(data.Transparency * 100 + 0.5) / 100
                 if t > 1 then t = 1 end
-                -- 一次性设置真实透明度（按游戏属性面板的 25% 一档取整）
                 task_spawn(pcall, setPropertieRF.InvokeServer, setPropertieRF, "Transparency", {block}, t)
             end
         end
