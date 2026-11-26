@@ -614,7 +614,7 @@ tabLayout.Parent = tabBar
 
 -- 卡片滚动区
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -32, 1, -228)
+scroll.Size = UDim2.new(1, -32, 1, -198)
 scroll.Position = UDim2.new(0, 16, 0, 124)
 scroll.BackgroundTransparency = 1
 scroll.BorderSizePixel = 0
